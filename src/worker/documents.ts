@@ -4,18 +4,11 @@ import { join } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { OpenTableResult } from '../protocol'
 import type { Connections } from './connections'
-import { listLocalWorkspaces } from './local-workspaces'
+import { type LocalWorkspace, listLocalWorkspaces } from './local-workspaces'
 
 const FOLDER = '.db-studio'
 /** The table query is a starting point; the person edits it. */
 const TABLE_QUERY_LIMIT = 100
-
-interface Workspace {
-  id: string
-  name: string
-  path: string
-  branch: string | null
-}
 
 export interface OpenTableInput {
   ref: string
@@ -27,8 +20,8 @@ export interface OpenTableInput {
 /** The focused workspace when it matches exactly one workspace of the list. */
 async function focusedWorkspace(
   orca: OrcaWorkerApi,
-  workspaces: Workspace[],
-): Promise<Workspace | undefined> {
+  workspaces: LocalWorkspace[],
+): Promise<LocalWorkspace | undefined> {
   const context = await orca.host.call('workspace.readContext')
   if (!context) return undefined
   const matches = workspaces.filter(
@@ -39,9 +32,9 @@ async function focusedWorkspace(
 
 async function targetWorkspace(
   orca: OrcaWorkerApi,
-  workspaces: Workspace[],
+  workspaces: LocalWorkspace[],
   workspaceId: string | undefined,
-): Promise<Workspace | undefined> {
+): Promise<LocalWorkspace | undefined> {
   if (workspaceId === undefined) return focusedWorkspace(orca, workspaces)
   const chosen = workspaces.find((w) => w.id === workspaceId)
   if (!chosen) throw new Error('That workspace is no longer open')

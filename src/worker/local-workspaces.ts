@@ -8,8 +8,8 @@ export interface LocalWorkspace {
 }
 
 /**
- * Orca reports the host id of a local workspace as `"local"`; any other id is a remote host,
- * whose paths mean nothing on this machine.
+ * Orca reports the host id of a local workspace as `"local"` (`null` also counts as local);
+ * any other id is a remote host, whose paths mean nothing on this machine.
  */
 export async function listLocalWorkspaces(orca: OrcaWorkerApi): Promise<LocalWorkspace[]> {
   const { workspaces } = await orca.host.call('workspace.list')
