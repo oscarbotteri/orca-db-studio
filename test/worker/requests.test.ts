@@ -620,3 +620,30 @@ describe('query.run values', () => {
     expect(result).toEqual({ columns: [], rows: [], truncated: false, affectedRows: 2 })
   })
 })
+
+describe('query.run wire size and cuts', () => {
+  test('counts the answer in UTF-8 bytes, which multibyte text outgrows', async () => {
+    const { worker: w } = await startWithFocus([], null, { rowLimit: 5000 })
+    const ref = await shopRef(w)
+
+    const result = await w.request('query.run', {
+      ref,
+      sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000) SELECT replace(hex(zeroblob(150)), '00', '日本') AS t FROM n",
+    })
+
+    expect(result.truncated).toBe(true)
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(900 * 1024)
+  })
+
+  test('does not cut a surrogate pair in half', async () => {
+    const { worker: w } = await startWithFocus([], null)
+    const ref = await shopRef(w)
+
+    const result = await w.request('query.run', {
+      ref,
+      sql: "SELECT printf('%.299c', 'x') || '😀😀' AS t",
+    })
+
+    expect(result.rows).toEqual([['x'.repeat(299)]])
+  })
+})

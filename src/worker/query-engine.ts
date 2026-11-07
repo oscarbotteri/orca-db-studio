@@ -11,7 +11,7 @@ export const RESULT_CEILING_ROWS = 5000
 /** A worker answer is at most 1 MiB; stop short of it. */
 const ANSWER_BYTES = 900 * 1024
 
-/** Text beyond this is cut; the full value is fetched on demand. */
+/** Text beyond this is cut; reading the full value is the full-value panel's job (G3). */
 const CELL_CHARS = 300
 
 function shorten(text: string): string {
@@ -26,7 +26,6 @@ function wireValue(value: unknown): unknown {
   if (typeof value === 'string') return shorten(value)
   if (typeof value === 'bigint') return value.toString()
   if (value instanceof Uint8Array) return `<blob ${formatSize(value.byteLength)}>`
-  if (value instanceof Date) return value.toISOString()
   return value
 }
 
@@ -45,7 +44,7 @@ export async function runStatement(
     let bytes = 0
     for (const row of fetched.slice(0, limit)) {
       const wired = row.map(wireValue)
-      bytes += JSON.stringify(wired).length + 1
+      bytes += Buffer.byteLength(JSON.stringify(wired)) + 1
       if (bytes > ANSWER_BYTES) break
       rows.push(wired)
     }

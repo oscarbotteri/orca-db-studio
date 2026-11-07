@@ -1,4 +1,6 @@
 // Whether a statement sets its own row count. G1
+// A best-effort scan for the common quoting rules: a wrong answer either way stays bounded by the
+// result ceiling, so engine-specific lexing (dollar quotes, backslash escapes) is not chased here.
 const QUOTES = new Set(["'", '"', '`'])
 
 /** Whether `LIMIT` appears outside strings, quoted names, comments and parentheses. */
@@ -21,12 +23,14 @@ export function hasOwnLimit(sql: string): boolean {
       depth++
       i++
     } else if (char === ')') {
-      depth--
+      depth = Math.max(0, depth - 1)
       i++
     } else if (/[A-Za-z_]/.test(char)) {
       let end = i + 1
       while (end < sql.length && /[A-Za-z0-9_$]/.test(sql[end] as string)) end++
-      if (depth === 0 && sql.slice(i, end).toUpperCase() === 'LIMIT') return true
+      // A name after a dot is a column, not the keyword.
+      const qualified = sql[i - 1] === '.'
+      if (depth === 0 && !qualified && sql.slice(i, end).toUpperCase() === 'LIMIT') return true
       i = end
     } else {
       i++
