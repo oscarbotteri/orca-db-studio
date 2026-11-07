@@ -186,14 +186,19 @@ interface Focus {
 }
 
 /** A host with real workspace folders, the focused one answering workspace.readContext. */
-async function startWithFocus(names: string[], focus: Focus | null, settings = {}) {
+async function startWithFocus(
+  names: string[],
+  focus: Focus | null,
+  settings = {},
+  hostIds: Record<string, string | null> = {},
+) {
   const listed = names.map((name) => ({
     id: `id-${name}`,
     kind: 'worktree' as const,
     name,
     path: join(root, name),
     branch: 'main',
-    hostId: 'local',
+    hostId: name in hostIds ? hostIds[name] : 'local',
   }))
   for (const w of listed) await mkdir(w.path, { recursive: true })
   const host = mockHost({
@@ -299,6 +304,47 @@ describe('table.open', () => {
     await expect(w.request('table.open', { ref, schema: 'main', table: 'orders' })).rejects.toThrow(
       'Open a workspace to open a table',
     )
+  })
+
+  test('fails clearly when the only workspaces are on a remote host', async () => {
+    const { host, worker: w } = await startWithFocus(['remote'], null, {}, { remote: 'ssh' })
+    const ref = await shopRef(w)
+
+    await expect(w.request('table.open', { ref, schema: 'main', table: 'orders' })).rejects.toThrow(
+      'Open a workspace to open a table',
+    )
+    expect(host.callsOf('editor.open')).toEqual([])
+  })
+
+  test('opens in the local workspace when a remote one is also open', async () => {
+    const { worker: w } = await startWithFocus(
+      ['remote', 'api'],
+      { branch: 'main', displayName: 'api' },
+      {},
+      { remote: 'ssh' },
+    )
+    const ref = await shopRef(w)
+
+    const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(await readFile(join(root, 'api', '.db-studio', 'orders.sql'), 'utf8')).toContain(
+      'LIMIT 100',
+    )
+  })
+
+  test('treats a workspace without a host id as local', async () => {
+    const { worker: w } = await startWithFocus(
+      ['api'],
+      { branch: 'main', displayName: 'api' },
+      {},
+      { api: null },
+    )
+    const ref = await shopRef(w)
+
+    const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
   })
 
   test('refuses a connection that was never added', async () => {
