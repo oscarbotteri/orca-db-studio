@@ -4,8 +4,8 @@ import {
   CHOOSER_REQUEST_KEY,
   type ConnectionList,
   type FoundSqliteFile,
-  type WorkspaceChoice,
   type SchemaTree,
+  type WorkspaceChoice,
 } from '../protocol'
 
 export type Loadable<T> =
@@ -36,6 +36,16 @@ function errorMessage(error: unknown): string {
 /** Tree keys are unique across levels and safe for any name or path. */
 export function treeKey(...parts: string[]): string {
   return JSON.stringify(parts)
+}
+
+/** The parts a tree key was made of, or undefined when it is not one of ours. */
+export function parseKey(key: string): unknown[] | undefined {
+  try {
+    const parts: unknown = JSON.parse(key)
+    return Array.isArray(parts) ? parts : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export function connectionKey(ref: string): string {
@@ -70,9 +80,14 @@ export function loadExpandedObjects(): void {
   const list = read(connections)
   if (list.status !== 'loaded') return
   const open = new Set(read(expanded))
-  for (const { ref } of list.value.sqliteFiles) {
+  for (const { ref } of [...list.value.sqliteFiles, ...list.value.servers]) {
     if (open.has(connectionKey(ref)) && !read(objects)[ref]) void loadObjects(ref)
   }
+}
+
+/** Drops what the explorer loaded for a connection that was edited or deleted. */
+export function forgetObjects(ref: string): void {
+  update(objects, ({ [ref]: _gone, ...rest }) => rest)
 }
 
 export function toggle(key: string, isExpanded: boolean): void {

@@ -3,8 +3,23 @@ import { basename, dirname, isAbsolute, normalize } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import { loadDriver } from '../drivers/registry'
 import type { ConnectionConfig, SchemaTree, Session, SqlDialect } from '../drivers/types'
-import type { ConnectionEntry, ConnectionList, QueryResult } from '../protocol'
+import type {
+  ConnectionEntry,
+  ConnectionForm,
+  ConnectionList,
+  QueryResult,
+  SavedConnection,
+} from '../protocol'
 import { runStatement } from './query-engine'
+import {
+  configOf,
+  deleteServer,
+  findServer,
+  getServer,
+  listServers,
+  passwordOf,
+  saveServer,
+} from './saved-connections'
 
 /** The registry keeps a SQLite file's path and nothing else. */
 const SQLITE_FILES_KEY = 'sqlite-files'
@@ -12,6 +27,10 @@ const SQLITE_FILES_KEY = 'sqlite-files'
 export interface Connections {
   list(): Promise<ConnectionList>
   addSqliteFile(path: string): Promise<ConnectionEntry>
+  saveServer(input: ServerInput): Promise<ConnectionEntry>
+  testServer(input: ServerInput): Promise<void>
+  getServer(ref: string): Promise<SavedConnection>
+  deleteServer(ref: string): Promise<void>
   listObjects(ref: string): Promise<SchemaTree>
   dialect(ref: string): Promise<SqlDialect>
   quoteIdent(ref: string, name: string): Promise<string>
@@ -19,14 +38,20 @@ export interface Connections {
   closeAll(): Promise<void>
 }
 
+interface ServerInput {
+  ref?: string
+  form: ConnectionForm
+  password?: string
+}
+
 function sqliteEntry(path: string): ConnectionEntry {
   // The folder, not the whole path: a narrow panel would cut the file name off.
   return { ref: path, name: basename(path), detail: basename(dirname(path)) }
 }
 
-async function connect(config: ConnectionConfig): Promise<Session> {
+async function connect(config: ConnectionConfig, secret?: string): Promise<Session> {
   const driver = await loadDriver(config.engine)
-  return driver.connect(config, undefined)
+  return driver.connect(config, secret)
 }
 
 async function storedSqliteFiles(orca: OrcaWorkerApi): Promise<string[]> {
@@ -49,26 +74,60 @@ async function addSqliteFile(orca: OrcaWorkerApi, input: string): Promise<Connec
 
 async function configFor(orca: OrcaWorkerApi, ref: string): Promise<ConnectionConfig> {
   if ((await storedSqliteFiles(orca)).includes(ref)) return { engine: 'sqlite', path: ref }
+  const server = await findServer(orca, ref)
+  if (server) return server
   throw new Error(`No connection ${ref}`)
 }
 
 export function createConnections(orca: OrcaWorkerApi): Connections {
   const sessions = new Map<string, Promise<Session>>()
 
+  async function openSession(ref: string, config: ConnectionConfig): Promise<Session> {
+    return connect(config, config.engine === 'sqlite' ? undefined : await passwordOf(orca, ref))
+  }
+
+  function forget(ref: string): void {
+    const open = sessions.get(ref)
+    sessions.delete(ref)
+    void open?.then((s) => s.close()).catch(() => undefined)
+  }
+
   function session(ref: string, config: ConnectionConfig): Promise<Session> {
     let opened = sessions.get(ref)
     if (!opened) {
-      opened = connect(config)
+      opened = openSession(ref, config)
       sessions.set(ref, opened)
       // A failed connect is not cached: the next request tries again.
-      opened.catch(() => sessions.delete(ref))
+      opened.catch(() => {
+        if (sessions.get(ref) === opened) sessions.delete(ref)
+      })
     }
     return opened
   }
 
   return {
     async list() {
-      return { sqliteFiles: (await storedSqliteFiles(orca)).map(sqliteEntry) }
+      return {
+        sqliteFiles: (await storedSqliteFiles(orca)).map(sqliteEntry),
+        servers: await listServers(orca),
+      }
+    },
+    async saveServer(input) {
+      const entry = await saveServer(orca, input)
+      // An edit may have changed where it points or its password.
+      forget(entry.ref)
+      return entry
+    },
+    async testServer({ ref, form, password }) {
+      const secret = password || (ref ? await passwordOf(orca, ref) : undefined)
+      await (await connect(configOf(form), secret)).close()
+    },
+    getServer(ref) {
+      return getServer(orca, ref)
+    },
+    async deleteServer(ref) {
+      await deleteServer(orca, ref)
+      forget(ref)
     },
     addSqliteFile(path) {
       return addSqliteFile(orca, path)

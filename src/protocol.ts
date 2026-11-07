@@ -13,6 +13,27 @@ export interface ConnectionEntry {
 
 export interface ConnectionList {
   sqliteFiles: ConnectionEntry[]
+  /** Saved connections to a database server. */
+  servers: ConnectionEntry[]
+}
+
+/** The engines the form offers; the worker refuses the ones without a driver yet. */
+export type ServerEngine = 'postgres' | 'mysql'
+
+/** What the connection form edits; the password travels beside it and is never stored here. */
+export interface ConnectionForm {
+  name: string
+  engine: ServerEngine
+  host: string
+  port: number
+  database: string
+  user: string
+}
+
+export interface SavedConnection {
+  form: ConnectionForm
+  /** Whether a password is kept for it, so the form can say "unchanged". */
+  hasPassword: boolean
 }
 
 /** A SQLite file found in a workspace, offered by the chooser. */
@@ -50,6 +71,18 @@ declare module 'orca' {
     'connections.list': { output: ConnectionList }
     'sqlite.findFiles': { output: { files: FoundSqliteFile[] } }
     'sqlite.add': { input: { path: string }; output: ConnectionEntry }
+    /** `password` unset keeps the stored one when editing; without `ref` a new connection is made. */
+    'connection.save': {
+      input: { ref?: string; form: ConnectionForm; password?: string }
+      output: ConnectionEntry
+    }
+    /** Connects with the form's values and closes again; rejects with why it could not. */
+    'connection.test': {
+      input: { ref?: string; form: ConnectionForm; password?: string }
+      output: Record<string, never>
+    }
+    'connection.get': { input: { ref: string }; output: SavedConnection }
+    'connection.delete': { input: { ref: string }; output: Record<string, never> }
     'explorer.listObjects': { input: { ref: string }; output: SchemaTree }
     /** Without `workspaceId` the worker picks the focused workspace or asks to choose one. */
     'table.open': {

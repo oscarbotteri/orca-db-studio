@@ -1,5 +1,6 @@
 import { type PanelContext, plugin, read, Stack } from 'orca'
-import { SqliteFiles } from './connections'
+import { ConnectionForm } from './connection-form'
+import { ServerConnections, SqliteFiles } from './connections'
 import { SqliteChooser } from './sqlite-chooser'
 import {
   chooserOpen,
@@ -26,6 +27,8 @@ export function setup(ctx: PanelContext): void {
 export default function Panel() {
   return (
     <Stack gap="md">
+      <ConnectionForm />
+      <ServerConnections />
       {read(chooserOpen) ? <SqliteChooser /> : null}
       <SqliteFiles />
     </Stack>

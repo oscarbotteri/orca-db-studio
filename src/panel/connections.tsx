@@ -9,11 +9,12 @@ import {
   read,
   Skeleton,
   Stack,
+  Text,
   Tree,
   type TreeItem,
 } from 'orca'
 import type { ConnectionEntry, SchemaNode } from '../protocol'
-import { WorkspacePicker } from './workspace-picker'
+import { editError, openEditForm, openNewForm } from './connection-form-state'
 import {
   connectionKey,
   connections,
@@ -22,11 +23,13 @@ import {
   openChooser,
   openError,
   openTable,
+  parseKey,
   schemaKey,
   type TableRef,
   toggle,
   treeKey,
 } from './state'
+import { WorkspacePicker } from './workspace-picker'
 
 /** Tree key of a table, which carries what opening it needs. */
 function objectKey(ref: string, schema: string, table: string): string {
@@ -34,14 +37,9 @@ function objectKey(ref: string, schema: string, table: string): string {
 }
 
 function tableOfKey(key: string): TableRef | undefined {
-  let parts: unknown
-  try {
-    parts = JSON.parse(key)
-  } catch {
-    return undefined
-  }
-  if (!Array.isArray(parts) || parts[0] !== 'object') return undefined
-  const [, ref, schema, table]: unknown[] = parts
+  const parts = parseKey(key)
+  if (parts?.[0] !== 'object') return undefined
+  const [, ref, schema, table] = parts
   if (typeof ref !== 'string' || typeof schema !== 'string' || typeof table !== 'string') {
     return undefined
   }
@@ -84,6 +82,35 @@ function connectionItem(entry: ConnectionEntry): TreeItem {
   return { ...item, icon: 'database', hasChildren: true }
 }
 
+function connectionOfKey(key: string): string | undefined {
+  const parts = parseKey(key)
+  return parts?.[0] === 'connection' && typeof parts[1] === 'string' ? parts[1] : undefined
+}
+
+interface ConnectionTreeProps {
+  label: string
+  entries: ConnectionEntry[]
+  /** Activating a connection row itself, for the groups that edit their connections. */
+  onActionConnection?: (ref: string) => void
+}
+
+function ConnectionTree({ label, entries, onActionConnection }: ConnectionTreeProps) {
+  return (
+    <Tree
+      label={label}
+      items={entries.map(connectionItem)}
+      expanded={read(expanded)}
+      onToggle={({ key, expanded: isExpanded }) => toggle(key, isExpanded)}
+      onAction={({ key }) => {
+        const table = tableOfKey(key)
+        if (table) return void openTable(table)
+        const ref = connectionOfKey(key)
+        if (ref !== undefined) onActionConnection?.(ref)
+      }}
+    />
+  )
+}
+
 interface SqliteTreeProps {
   entries: ConnectionEntry[]
 }
@@ -100,17 +127,32 @@ function SqliteTree({ entries }: SqliteTreeProps) {
       </EmptyState>
     )
   }
+  return <ConnectionTree label="SQLite files" entries={entries} />
+}
+
+export function ServerConnections() {
+  const list = read(connections)
+  const entries = list.status === 'loaded' ? list.value.servers : []
   return (
-    <Tree
-      label="SQLite files"
-      items={entries.map(connectionItem)}
-      expanded={read(expanded)}
-      onToggle={({ key, expanded: isExpanded }) => toggle(key, isExpanded)}
-      onAction={({ key }) => {
-        const table = tableOfKey(key)
-        if (table) void openTable(table)
-      }}
-    />
+    <Stack gap="sm">
+      <Row justify="between" align="center">
+        <Heading level={3}>Connections</Heading>
+        <IconButton icon="add" label="New connection" variant="ghost" onPress={openNewForm} />
+      </Row>
+      {read(editError) ? (
+        <Callout tone="danger" title="Could not open the connection">
+          {read(editError)}
+        </Callout>
+      ) : null}
+      {entries.length === 0 ? (
+        <Text muted>No saved connections. Press + to add a PostgreSQL connection.</Text>
+      ) : (
+        <>
+          <ConnectionTree label="Connections" entries={entries} onActionConnection={openEditForm} />
+          <Text muted>Press Enter on a connection to edit or delete it.</Text>
+        </>
+      )}
+    </Stack>
   )
 }
 

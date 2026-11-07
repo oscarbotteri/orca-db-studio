@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { mockHost, mountWorker, type TestWorker } from 'orca/testing'
+import { hostError, mockHost, mountWorker, type TestWorker } from 'orca/testing'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { CHOOSER_REQUEST_KEY } from '../../src/protocol'
 import * as worker from '../../src/worker/index'
@@ -86,7 +86,7 @@ describe('sqlite.add', () => {
     const added = await w.request('sqlite.add', { path })
 
     expect(added).toEqual({ ref: path, name: 'shop.db', detail: basename(root) })
-    expect(await w.request('connections.list')).toEqual({ sqliteFiles: [added] })
+    expect(await w.request('connections.list')).toEqual({ sqliteFiles: [added], servers: [] })
     expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
   })
 
@@ -108,7 +108,7 @@ describe('sqlite.add', () => {
     await expect(w.request('sqlite.add', { path })).rejects.toThrow(
       `${path} is not a SQLite database`,
     )
-    expect(await w.request('connections.list')).toEqual({ sqliteFiles: [] })
+    expect(await w.request('connections.list')).toEqual({ sqliteFiles: [], servers: [] })
   })
 
   test('refuses a relative path', async () => {
@@ -404,5 +404,134 @@ describe('query.run answer size', () => {
     expect(result.truncated).toBe(true)
     expect(result.rows.length).toBeLessThan(3000)
     expect(JSON.stringify(result).length).toBeLessThan(900 * 1024)
+  })
+})
+
+const PG_FORM = {
+  name: 'Shop DB',
+  engine: 'postgres' as const,
+  host: 'db.internal',
+  port: 5432,
+  database: 'shop',
+  user: 'app',
+}
+
+describe('connection.save', () => {
+  test('lists a saved connection, keeping the password in secrets and out of storage', async () => {
+    const host = mockHost()
+    const w = await mountWorker(worker, { host })
+
+    const saved = await w.request('connection.save', { form: PG_FORM, password: 's3cret-pw' })
+
+    expect(saved).toMatchObject({ name: 'Shop DB', detail: 'app@db.internal:5432/shop' })
+    expect((await w.request('connections.list')).servers).toEqual([saved])
+    expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
+    expect(JSON.stringify(host.data().storage)).not.toContain('s3cret-pw')
+    expect(Object.values(host.data().secrets)).toEqual(['s3cret-pw'])
+  })
+})
+
+describe('connection.save without a secrets store', () => {
+  test('refuses a password with a clear error and stores nothing', async () => {
+    const host = mockHost({ results: { 'secrets.protection': { status: 'unavailable' } } })
+    const w = await mountWorker(worker, { host })
+
+    await expect(
+      w.request('connection.save', { form: PG_FORM, password: 's3cret-pw' }),
+    ).rejects.toThrow(/secrets store is unavailable/)
+
+    expect(host.data().storage).toEqual({})
+    expect(host.data().secrets).toEqual({})
+    expect((await w.request('connections.list')).servers).toEqual([])
+  })
+
+  test('still saves a connection that has no password', async () => {
+    const host = mockHost({ results: { 'secrets.protection': { status: 'unavailable' } } })
+    const w = await mountWorker(worker, { host })
+
+    await w.request('connection.save', { form: PG_FORM })
+
+    expect((await w.request('connections.list')).servers).toHaveLength(1)
+  })
+})
+
+describe('editing and deleting a connection', () => {
+  test('edit keeps the stored password unless a new one is given', async () => {
+    const host = mockHost()
+    const w = await mountWorker(worker, { host })
+    const { ref } = await w.request('connection.save', { form: PG_FORM, password: 'first-pw' })
+
+    await w.request('connection.save', { ref, form: { ...PG_FORM, name: 'Renamed' } })
+    expect(await w.request('connection.get', { ref })).toEqual({
+      form: { ...PG_FORM, name: 'Renamed' },
+      hasPassword: true,
+    })
+    expect(Object.values(host.data().secrets)).toEqual(['first-pw'])
+
+    await w.request('connection.save', { ref, form: PG_FORM, password: 'second-pw' })
+    expect(Object.values(host.data().secrets)).toEqual(['second-pw'])
+    expect((await w.request('connections.list')).servers).toHaveLength(1)
+  })
+
+  test('delete removes the registry entry and the password', async () => {
+    const host = mockHost()
+    const w = await mountWorker(worker, { host })
+    const { ref } = await w.request('connection.save', { form: PG_FORM, password: 'pw' })
+
+    await w.request('connection.delete', { ref })
+
+    expect((await w.request('connections.list')).servers).toEqual([])
+    expect(host.data().secrets).toEqual({})
+    await expect(w.request('connection.get', { ref })).rejects.toThrow(`No connection ${ref}`)
+  })
+
+  test('refuses an invalid form and a MySQL connection for now', async () => {
+    const w = await mountWorker(worker, { host: mockHost() })
+
+    await expect(w.request('connection.save', { form: { ...PG_FORM, host: ' ' } })).rejects.toThrow(
+      'Enter a host',
+    )
+    await expect(
+      w.request('connection.save', { form: { ...PG_FORM, engine: 'mysql' } }),
+    ).rejects.toThrow(/not available yet/)
+  })
+})
+
+describe('connection.test', () => {
+  test('reports why a server could not be reached', async () => {
+    const w = await mountWorker(worker, { host: mockHost() })
+
+    await expect(
+      w.request('connection.test', { form: { ...PG_FORM, host: '127.0.0.1', port: 1 } }),
+    ).rejects.toThrow(/ECONNREFUSED/)
+  })
+})
+
+describe('saved connection details', () => {
+  test('stores trimmed values', async () => {
+    const w = await mountWorker(worker, { host: mockHost() })
+
+    const { ref } = await w.request('connection.save', {
+      form: { ...PG_FORM, name: ' Shop DB ', host: ' db.internal ', user: ' app ' },
+    })
+
+    expect((await w.request('connection.get', { ref })).form).toEqual(PG_FORM)
+  })
+
+  test('delete still succeeds and notifies when the secrets store refuses to delete', async () => {
+    const host = mockHost({
+      results: {
+        'secrets.delete': () => {
+          throw hostError('action_failed', 'store unavailable')
+        },
+      },
+    })
+    const w = await mountWorker(worker, { host })
+    const { ref } = await w.request('connection.save', { form: PG_FORM })
+
+    await w.request('connection.delete', { ref })
+
+    expect((await w.request('connections.list')).servers).toEqual([])
+    expect(w.posts.filter((p) => p.event === 'connections.changed')).toHaveLength(2)
   })
 })
