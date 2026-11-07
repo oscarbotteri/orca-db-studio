@@ -3,7 +3,7 @@
   "id": "db-studio",
   "name": "DB Studio",
   "version": "0.1.0",
-  "description": "PostgreSQL, MySQL/MariaDB and SQLite from an editor tab, with safe, logged database access for Orca's agents over MCP.",
+  "description": "Browse and query PostgreSQL, MySQL/MariaDB and SQLite from Orca. Reads each worktree's .env to offer its database.",
   "engines": {
     "orca": ">=1.4.248"
   },
@@ -22,23 +22,20 @@
     ],
     "customEditors": [
       {
-        "id": "db-studio-sqlite",
+        "id": "db-studio-query",
         "title": "DB Studio",
-        "extensions": [".db", ".sqlite", ".sqlite3", ".db3"],
+        "extensions": [".sql"],
         "entry": "src/editor/index.ts",
         "frame": "isolated"
       }
     ],
     "commands": [
-      { "id": "db-studio.newQuery", "title": "DB Studio: New Query", "when": "global" },
-      { "id": "db-studio.openTable", "title": "DB Studio: Open Table", "when": "global" },
       {
-        "id": "db-studio.switchConnection",
-        "title": "DB Studio: Switch Connection",
+        "id": "db-studio.openSqliteFile",
+        "title": "DB Studio: Open SQLite File",
         "when": "global"
       }
     ],
-    "hooks": [{ "event": "agent.launch.before", "onError": "pass" }],
     "settings": [
       {
         "key": "envVariable",
@@ -52,15 +49,34 @@
         "title": "Query timeout (seconds)",
         "type": "integer",
         "default": 30,
+        "minimum": 1,
+        "maximum": 110
+      },
+      {
+        "key": "rowLimit",
+        "title": "Row limit",
+        "description": "Rows shown for a query without its own LIMIT. Results never exceed 5000 rows or about 900 KB.",
+        "type": "integer",
+        "default": 100,
         "minimum": 1
       }
     ]
   },
   "capabilities": [
-    { "kind": "storage:own" },
-    { "kind": "secrets:own" },
-    { "kind": "settings:own" },
-    { "kind": "workspace:read" },
-    { "kind": "notifications:show" }
+    {
+      "kind": "storage:own"
+    },
+    {
+      "kind": "secrets:own"
+    },
+    {
+      "kind": "settings:own"
+    },
+    {
+      "kind": "workspace:read"
+    },
+    {
+      "kind": "workspace:write"
+    }
   ]
 }
