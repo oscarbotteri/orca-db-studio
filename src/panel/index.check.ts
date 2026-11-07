@@ -6,12 +6,12 @@ import { connectionKey, schemaKey } from './state'
 const SHOP: ConnectionEntry = {
   ref: '/Users/dev/api/data/shop.db',
   name: 'shop.db',
-  detail: '/Users/dev/api/data/shop.db',
+  detail: 'data',
 }
 const ANALYTICS: ConnectionEntry = {
   ref: '/Users/dev/reports/analytics.sqlite3',
   name: 'analytics.sqlite3',
-  detail: '/Users/dev/reports/analytics.sqlite3',
+  detail: 'reports',
 }
 
 const SHOP_TREE: SchemaTree = {

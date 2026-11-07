@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest'
 import * as panel from '../../src/panel/index'
 import { CHOOSER_REQUEST_KEY, type ConnectionEntry, type SchemaTree } from '../../src/protocol'
 
-const SHOP: ConnectionEntry = { ref: '/data/shop.db', name: 'shop.db', detail: '/data/shop.db' }
+const SHOP: ConnectionEntry = { ref: '/data/shop.db', name: 'shop.db', detail: 'data' }
 
 const SHOP_TREE: SchemaTree = {
   schemas: [
@@ -64,7 +64,7 @@ describe('SQLite file chooser', () => {
         'sqlite.findFiles': FOUND,
         'sqlite.add': ({ path }) => {
           added = path
-          return { ref: path, name: 'app.db', detail: path }
+          return { ref: path, name: 'app.db', detail: 'api' }
         },
       },
     })

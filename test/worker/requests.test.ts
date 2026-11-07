@@ -2,7 +2,7 @@
 // SQLite files in temporary workspaces.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { mockHost, mountWorker, type TestWorker } from 'orca/testing'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
@@ -85,7 +85,7 @@ describe('sqlite.add', () => {
 
     const added = await w.request('sqlite.add', { path })
 
-    expect(added).toEqual({ ref: path, name: 'shop.db', detail: path })
+    expect(added).toEqual({ ref: path, name: 'shop.db', detail: basename(root) })
     expect(await w.request('connections.list')).toEqual({ sqliteFiles: [added] })
     expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
   })

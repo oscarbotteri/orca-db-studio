@@ -7,7 +7,7 @@ export type { DbObject, SchemaNode, SchemaTree } from './drivers/types'
 export interface ConnectionEntry {
   ref: string
   name: string
-  /** Where it points, shown under the name. */
+  /** Where it points, short enough to sit beside the name. */
   detail: string
 }
 

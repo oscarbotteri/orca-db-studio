@@ -1,5 +1,5 @@
 // Connection registry (storage:own), passwords (secrets:own), SQLite files, worktree connections from .env. C1-C4
-import { basename, isAbsolute, normalize } from 'node:path'
+import { basename, dirname, isAbsolute, normalize } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import { loadDriver } from '../drivers/registry'
 import type { ConnectionConfig, SchemaTree, Session } from '../drivers/types'
@@ -16,7 +16,8 @@ export interface Connections {
 }
 
 function sqliteEntry(path: string): ConnectionEntry {
-  return { ref: path, name: basename(path), detail: path }
+  // The folder, not the whole path: a narrow panel would cut the file name off.
+  return { ref: path, name: basename(path), detail: basename(dirname(path)) }
 }
 
 async function connect(config: ConnectionConfig): Promise<Session> {
