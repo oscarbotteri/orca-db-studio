@@ -91,22 +91,23 @@ export function forgetObjects(ref: string): void {
   update(objects, ({ [ref]: _gone, ...rest }) => rest)
 }
 
-/** The SQLite file the person is deciding to remove, shown as a card above the list. */
-export const removal = atom<ConnectionEntry | null>('sqlite-removal', null, { persist: 'plugin' })
-export const removeError = atom<string | null>(null)
-export const removing = atom(false)
+/** The SQLite file the person is deciding to remove, and why the last attempt failed. */
+export interface Removal {
+  entry: ConnectionEntry
+  error: string | null
+}
+
+/** Kept by Orca for the panel, so the card survives a tab switch. */
+export const removal = atom<Removal | null>('sqlite-removal', null, { persist: 'plugin' })
 
 export function askToRemove(ref: string): void {
   const list = read(connections)
   const entry = list.status === 'loaded' && list.value.sqliteFiles.find((e) => e.ref === ref)
-  if (!entry) return
-  set(removeError, null)
-  set(removal, entry)
+  if (entry) set(removal, { entry, error: null })
 }
 
 export function cancelRemoval(): void {
   set(removal, null)
-  set(removeError, null)
 }
 
 /** Collapses a connection's tree: its own key and every schema key beneath it. */
@@ -114,20 +115,22 @@ function collapse(ref: string): void {
   update(expanded, (keys) => keys.filter((key) => parseKey(key)?.[1] !== ref))
 }
 
+let removingNow = false
+
 export async function removeSqliteFile(path: string): Promise<void> {
-  if (read(removing)) return
-  set(removing, true)
-  set(removeError, null)
+  // A double press must not send two requests.
+  if (removingNow) return
+  removingNow = true
   try {
     await plugin.request('sqlite.remove', { path })
     collapse(path)
     forgetObjects(path)
     set(removal, null)
   } catch (error) {
-    set(removeError, errorMessage(error))
+    update(removal, (r) => r && { ...r, error: errorMessage(error) })
     return
   } finally {
-    set(removing, false)
+    removingNow = false
   }
   await refreshConnections()
 }

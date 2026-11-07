@@ -75,12 +75,12 @@ export default defineCheck({
     },
   },
   'remove-file': {
-    persisted: { plugin: { 'sqlite-removal': SHOP } },
+    persisted: { plugin: { 'sqlite-removal': { entry: SHOP, error: null } } },
     requests: { 'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [] } },
   },
   'remove-file-dark': {
     theme: 'dark',
-    persisted: { plugin: { 'sqlite-removal': SHOP } },
+    persisted: { plugin: { 'sqlite-removal': { entry: SHOP, error: null } } },
     requests: { 'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [] } },
   },
   chooser: {

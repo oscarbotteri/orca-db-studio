@@ -181,6 +181,31 @@ describe('sqlite.remove', () => {
     await second.deactivate()
   })
 
+  test('a query on a removed file fails like any unknown connection', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await mountWorker(worker, { host: mockHost() })
+    await w.request('sqlite.add', { path })
+    await w.request('query.run', { ref: path, sql: 'SELECT 1' })
+    await w.request('sqlite.remove', { path })
+
+    await expect(w.request('query.run', { ref: path, sql: 'SELECT 1' })).rejects.toThrow(
+      `No connection ${path}`,
+    )
+    await w.deactivate()
+  })
+
+  test('a removed file found in a workspace is still offered by the chooser', async () => {
+    const path = await createDatabase(join(root, 'api', 'app.db'))
+    const w = await start([{ name: 'api' }])
+    await w.request('sqlite.add', { path })
+    await w.request('sqlite.remove', { path })
+
+    const { files } = await w.request('sqlite.findFiles')
+
+    expect(files.map((f) => f.path)).toEqual([path])
+    await w.deactivate()
+  })
+
   test('a removed file can be added again', async () => {
     const path = await createDatabase(join(root, 'shop.db'))
     const w = await mountWorker(worker, { host: mockHost() })
