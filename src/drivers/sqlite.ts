@@ -122,6 +122,7 @@ class SqliteSession implements Session {
 
 export const sqliteDriver: Driver = {
   async connect(config: ConnectionConfig): Promise<Session> {
+    if (config.engine !== 'sqlite') throw new Error(`Not a SQLite connection: ${config.engine}`)
     const session = new SqliteSession(config.path)
     try {
       await session.thread().call('open', {})

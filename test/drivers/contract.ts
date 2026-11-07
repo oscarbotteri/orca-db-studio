@@ -78,10 +78,14 @@ export function driverContract(name: string, target: ContractTarget): void {
 
     test('cancel stops a running query and the session keeps working', async () => {
       const cursor = await session.query(target.slowQuery, { queryId: 'slow' })
-      const fetching = cursor.fetch(1)
+      // Caught at once: a server may fail the fetch before cancel() returns.
+      const failure = cursor.fetch(1).then(
+        () => undefined,
+        (error: Error) => error,
+      )
       await new Promise((resolve) => setTimeout(resolve, 100))
       await session.cancel('slow')
-      await expect(fetching).rejects.toThrow(/cancel/i)
+      expect((await failure)?.message).toMatch(/cancel/i)
       expect(await run(session, 'SELECT 1')).toEqual([[1]])
     })
   })

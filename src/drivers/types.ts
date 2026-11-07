@@ -1,16 +1,24 @@
 // Driver, Session and Cursor interfaces. Code outside src/drivers never branches on engine.
 
-export type Engine = 'sqlite'
+export type Engine = 'postgres' | 'sqlite'
 
 export interface SqliteConfig {
   engine: 'sqlite'
   path: string
 }
 
-/** The SQL flavour an editor highlights for. */
-export type SqlDialect = 'sqlite'
+export interface PostgresConfig {
+  engine: 'postgres'
+  host: string
+  port: number
+  database: string
+  user: string
+}
 
-export type ConnectionConfig = SqliteConfig
+/** The SQL flavour an editor highlights for. */
+export type SqlDialect = 'postgres' | 'sqlite'
+
+export type ConnectionConfig = PostgresConfig | SqliteConfig
 
 export interface Driver {
   connect(config: ConnectionConfig, secret: string | undefined): Promise<Session>
@@ -32,6 +40,8 @@ export interface SchemaTree {
 
 export interface QueryOptions {
   queryId: string
+  /** The server ends the statement after this long; unset means no limit. */
+  timeoutMs?: number
 }
 
 export interface ColumnMeta {
