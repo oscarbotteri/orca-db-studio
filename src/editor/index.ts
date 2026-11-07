@@ -1,6 +1,7 @@
 // Query document editor: a custom editor for .sql files. Q1, G1, ADR 0003
-import type { SqlDialect } from '../protocol'
+import type { ConnectionEntry, SqlDialect } from '../protocol'
 import { createConnectionChooser } from './connection-chooser'
+import { chooserState } from './connection-state'
 import { renderError, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
 import {
@@ -71,9 +72,13 @@ const result = div('result')
 document.body.append(toolbar, editorHost, result)
 
 const ref = connectionRef(doc.value)
-const { sqliteFiles } = await orca.plugin.request('connections.list')
-// A connection to choose: the file names none, or names one the registry no longer holds.
-const needsChoice = ref === undefined || !sqliteFiles.some((entry) => entry.ref === ref)
+let entries: ConnectionEntry[] | undefined
+try {
+  entries = (await orca.plugin.request('connections.list')).sqliteFiles
+} catch {
+  // Without the list the document's own line stands; connection.info below still checks it.
+}
+const { needsChoice, notice } = chooserState(ref, entries, doc.readOnly)
 let dialect: SqlDialect | undefined
 let failure: string | undefined
 if (ref !== undefined && !needsChoice) {
@@ -95,28 +100,39 @@ const editor = createSqlEditor({
 doc.onReplace((value) => editor.replace(value))
 
 let running = false
-let connected = !needsChoice
+let connected = !needsChoice && failure === undefined
+/** Only the latest choice may land: an earlier, slower one is stale by then. */
+let latestChoice = 0
 
 async function connect(chosen: string): Promise<void> {
-  editor.change(connectionLineChange(editor.text(), chosen))
+  const mine = ++latestChoice
   try {
     await orca.plugin.request('connection.info', { ref: chosen })
   } catch (error) {
+    if (mine !== latestChoice) return
     // The chooser stays up so another connection can be picked.
     chooser.setNotice(errorMessage(error))
+    chooser.reset()
     return
   }
+  if (mine !== latestChoice) return
+  // The line is written only for a connection that works, so the file never keeps a broken one.
+  editor.change(connectionLineChange(editor.text(), chosen))
   chooser.element.hidden = true
+  chooser.setNotice(undefined)
   result.replaceChildren()
   connected = true
   run.disabled = false
 }
 
-const chooser = createConnectionChooser(sqliteFiles, (chosen) => void connect(chosen))
-chooser.element.hidden = !needsChoice
-if (ref !== undefined && needsChoice) {
-  chooser.setNotice(`The connection ${ref} no longer exists. Choose another.`)
-}
+const chooser = createConnectionChooser(
+  entries ?? [],
+  (chosen) => void connect(chosen),
+  doc.readOnly,
+)
+// A registered connection that fails to connect still offers the chooser beside the error.
+chooser.element.hidden = connected
+chooser.setNotice(notice)
 toolbar.after(chooser.element)
 
 async function execute(): Promise<void> {
@@ -124,7 +140,11 @@ async function execute(): Promise<void> {
   if (running || !connected) return
   const ref = connectionRef(editor.text())
   if (ref === undefined) {
-    renderError(result, NO_CONNECTION)
+    // The line was removed after connecting, by undo or by hand: offer the chooser again.
+    connected = false
+    run.disabled = true
+    chooser.element.hidden = false
+    chooser.setNotice(NO_CONNECTION)
     return
   }
   const sql = editor.selection() ?? statementAt(editor.text(), editor.cursor())

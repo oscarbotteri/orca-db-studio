@@ -46,6 +46,12 @@ describe('connectionLineChange', () => {
     })
   })
 
+  test('replaces a CRLF header without touching its line ending', () => {
+    const text = '-- db-studio: connection=/gone.db\r\nSELECT 1'
+    const change = connectionLineChange(text, '/a.db')
+    expect(text.slice(change.to, change.to + 2)).toBe('\r\n')
+  })
+
   test('keeps a first line that is not a header', () => {
     const change = connectionLineChange('-- notes\nSELECT 1', '/a.db')
     expect(change.to).toBe(0)

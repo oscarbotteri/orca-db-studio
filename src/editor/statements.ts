@@ -16,8 +16,9 @@ export interface TextChange {
 
 /** The edit that makes `ref` the document's connection: a new first line, or the stale one replaced. */
 export function connectionLineChange(text: string, ref: string): TextChange {
-  const line = `-- db-studio: connection=${ref}`
-  const firstLine = text.split('\n', 1)[0] ?? ''
+  const line = `${HEADER_PREFIX}${ref}`
+  // A CRLF file's first line ends before the \r, which stays with the rest of the file.
+  const firstLine = (text.split('\n', 1)[0] ?? '').replace(/\r$/, '')
   if (firstLine.startsWith(HEADER_PREFIX)) return { from: 0, to: firstLine.length, insert: line }
   return { from: 0, to: 0, insert: `${line}\n` }
 }
