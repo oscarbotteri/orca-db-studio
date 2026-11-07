@@ -22,7 +22,7 @@ PRD: <IDs from docs/PRD.md> · ADR: [nnnn](docs/adr/nnnn-name.md)
 
 ## What changed
 
-<!-- One bullet per meaningful change. Lead with the thing (`src/worker/policy.ts`, a tool, a setting), then what it does. -->
+<!-- One bullet per meaningful change. Lead with the thing (`src/worker/query-engine.ts`, a command, a setting), then what it does. -->
 
 -
 
@@ -40,8 +40,7 @@ PRD: <IDs from docs/PRD.md> · ADR: [nnnn](docs/adr/nnnn-name.md)
 
 - [ ] `npx tsc --noEmit`, `orca plugin validate .`
 - [ ] `npm run lint`, `npm run format:check`
-- [ ] `npm run test:drivers` against every affected engine (<n> files, <n> tests); N/A if no driver or policy change
-- [ ] Read-only bypass tests (writes hidden in CTEs, functions, multi-statement batches); N/A if no policy change
+- [ ] `npm run test:drivers` against every affected engine (<n> files, <n> tests); N/A if no driver change
 - [ ] `orca plugin test .` and `orca plugin check .` for UI changes; N/A otherwise
 
 ## Notes for review (optional)
@@ -62,8 +61,8 @@ PRD: <IDs from docs/PRD.md> · ADR: [nnnn](docs/adr/nnnn-name.md)
 - [ ] Title and every commit follow Conventional Commits, with no AI references
 - [ ] Tests added or updated; driver tests run against real databases, not mocks
 - [ ] Docs updated (PRD, system architecture, ADR) when behavior or a decision changed
-- [ ] Public contracts (`protocol.ts`, driver interface, MCP tool schemas, manifest settings) are unchanged, or the change is called out in the notes
-- [ ] Every query still goes through the policy layer and the activity log; read-only is enforced by the database session
+- [ ] Public contracts (`protocol.ts`, driver interface, manifest settings) are unchanged, or the change is called out in the notes
+- [ ] Every query still goes through the worker; UI code never touches a driver
 - [ ] No secrets, dotenv files, credentials or personal data; passwords only in `secrets:own`
 - [ ] No native modules; anything the worker needs at runtime is bundled into `vendor/`
 - [ ] Nothing from the PRD Non-goals

@@ -6,15 +6,15 @@ Your role is to analyze user requirements, delegate tasks to appropriate sub-age
 
 ## Project Overview
 
-DB Studio is an Orca plugin for working with PostgreSQL, MySQL/MariaDB and SQLite from an editor tab, with safe, logged database access for Orca's agents over MCP.
+DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB and SQLite without leaving Orca. The current target is the MVP in `docs/PRD.md`. Build only requirements marked `MVP` unless the task says otherwise.
 
-**Every database call goes through the worker's policy layer** — the UI, the gateway and the MCP server never touch a driver directly.
+**Every database call goes through the worker** — UI code never touches a driver directly.
 
 ## Conventions worth knowing
 
 - `src/drivers/` is the only place that knows which engine is behind a connection. Code outside it must not branch on engine type — add a method to the driver interface instead.
-- `mcp/` is a plain Node stdio server with zero dependencies. Keep it that way.
-- UI code lives in `src/editor/` (grid, SQL editor, schema page) and `src/panel/` (connections, approvals, activity). Promote to a shared folder only when both actually need it.
+- Every tab is a `.sql` query document whose first line names its connection. There is no table view and no `.db` custom editor.
+- UI code lives in `src/editor/` (query document editor: SQL editor, grid) and `src/panel/` (connections, explorer). Promote to a shared folder only when both actually need it.
 
 ## Global conventions
 
@@ -35,10 +35,9 @@ DB Studio is an Orca plugin for working with PostgreSQL, MySQL/MariaDB and SQLit
 - After completing any task, verify with `npx tsc --noEmit`, `orca plugin validate .`, then lint and format (`npm run lint`, `npm run format`).
 - No native modules or binaries — the Orca directory rejects them. Drivers must be pure JS, bundled into `vendor/`; SQLite uses `node:sqlite`.
 - An installed plugin cannot carry `node_modules`. Anything the worker needs at runtime must be bundled.
-- Credentials live only in `secrets:own`. Never log them, never write them to `storage:own`, never pass them to agents through env vars or prompts.
-- Read-only must be enforced by the database session (`SET TRANSACTION READ ONLY`, `START TRANSACTION READ ONLY`, read-only SQLite connection). Parsing SQL is a UX hint, never the security boundary.
-- Every query, from the UI or an agent, is written to the activity log.
-- Never load a full result set into memory — use cursors / streaming and page through the driver interface.
+- Every plugin file must be 1 MiB or less, and `vendor/` bundles are committed with the `build/` source that produces them. No `eval` or `new Function` in anything loaded by a frame.
+- Saved passwords live only in `secrets:own`. Never log them, never write them to `storage:own`, never pass them to agents through env vars or prompts. Worktree connections are read from the worktree's `.env` / `.env.local` on use and never copied anywhere.
+- Never load a full result set into memory — read through the driver's cursor and stop at the row limit (or the query's own `LIMIT`) and always at the result ceiling. A worker answer is at most 1 MiB.
 - Reference requirement IDs from `docs/PRD.md` (`C1`, `G1`, `A2`, ...) in PR descriptions when a change implements or changes one.
 - Keep commits focused and use conventional commit format without AI references.
 - Never commit secrets, dotenv files, tokens, private keys, database credentials, or personal data.
@@ -47,10 +46,9 @@ DB Studio is an Orca plugin for working with PostgreSQL, MySQL/MariaDB and SQLit
 
 - Run the narrowest useful test first, then broaden when shared behavior or public contracts changed.
 - Driver changes run the integration tests against all affected engines (Testcontainers), not just one.
-- Policy changes must keep the read-only bypass tests passing (writes hidden in CTEs, functions, multi-statement batches).
 - UI changes run `orca plugin test .` and `orca plugin check .`; use `orca plugin shot <key>` to look at the result.
 - Do not hide failing tests, lint, type, build, validation, or syntax errors.
-- Preserve public contracts (`protocol.ts`, the driver interface, MCP tool schemas, manifest settings) unless the change intentionally updates them and the user accepted that scope.
+- Preserve public contracts (`protocol.ts`, the driver interface, manifest settings) unless the change intentionally updates them and the user accepted that scope.
 
 ## Dev loop
 
