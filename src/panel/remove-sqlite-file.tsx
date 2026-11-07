@@ -1,10 +1,21 @@
 // Removing a SQLite file from the list; the file on disk is never touched. C1
 import { Button, Callout, Card, Row, read, Stack, Text } from 'orca'
-import { cancelRemoval, removal, removeError, removeSqliteFile, removing } from './state'
+import {
+  cancelRemoval,
+  connections,
+  removal,
+  removeError,
+  removeSqliteFile,
+  removing,
+} from './state'
 
 export function RemoveSqliteFile() {
   const entry = read(removal)
-  if (!entry) return null
+  const list = read(connections)
+  // The card is kept across tab switches, so the file may have gone since.
+  const listed =
+    list.status === 'loaded' && list.value.sqliteFiles.some((e) => e.ref === entry?.ref)
+  if (!entry || !listed) return null
   return (
     <Card title={entry.name}>
       <Stack gap="sm">

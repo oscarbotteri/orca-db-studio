@@ -123,12 +123,13 @@ export async function removeSqliteFile(path: string): Promise<void> {
     collapse(path)
     forgetObjects(path)
     set(removal, null)
-    await refreshConnections()
   } catch (error) {
     set(removeError, errorMessage(error))
+    return
   } finally {
     set(removing, false)
   }
+  await refreshConnections()
 }
 
 export function toggle(key: string, isExpanded: boolean): void {
