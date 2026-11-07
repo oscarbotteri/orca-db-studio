@@ -34,7 +34,12 @@ function objectKey(ref: string, schema: string, table: string): string {
 }
 
 function tableOfKey(key: string): TableRef | undefined {
-  const parts: unknown = JSON.parse(key)
+  let parts: unknown
+  try {
+    parts = JSON.parse(key)
+  } catch {
+    return undefined
+  }
   if (!Array.isArray(parts) || parts[0] !== 'object') return undefined
   const [, ref, schema, table]: unknown[] = parts
   if (typeof ref !== 'string' || typeof schema !== 'string' || typeof table !== 'string') {

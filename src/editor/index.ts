@@ -2,7 +2,7 @@
 import type { SqlDialect } from '../protocol'
 import { renderError, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
-import { connectionRef, isTableQuery, statementAt } from './statements'
+import { connectionRef, isTableQuery, statementAt, statementCount } from './statements'
 
 const STYLE = `
   html, body { margin: 0; height: 100%; }
@@ -26,6 +26,9 @@ const STYLE = `
   .grid th { position: sticky; top: 0; background: var(--orca-background); }
   .grid td.null { opacity: .5; font-style: italic; }
 `
+
+const NO_CONNECTION =
+  'This file names no connection. Its first line should be -- db-studio: connection=<ref>'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -59,7 +62,7 @@ const ref = connectionRef(doc.value)
 let dialect: SqlDialect | undefined
 let failure: string | undefined
 if (ref === undefined) {
-  failure = 'This file names no connection. Its first line should be -- db-studio: connection=<ref>'
+  failure = NO_CONNECTION
 } else {
   try {
     dialect = (await orca.plugin.request('connection.info', { ref })).dialect
@@ -78,19 +81,33 @@ const editor = createSqlEditor({
 })
 doc.onReplace((value) => editor.replace(value))
 
+let running = false
+
 async function execute(): Promise<void> {
-  if (ref === undefined) return
+  // Mod-Enter bypasses the disabled button; a second run would race the first.
+  if (running) return
+  const ref = connectionRef(editor.text())
+  if (ref === undefined) {
+    renderError(result, NO_CONNECTION)
+    return
+  }
   const sql = editor.selection() ?? statementAt(editor.text(), editor.cursor())
   if (!sql) {
     renderError(result, 'Nothing to run: put the cursor in a statement or select one.')
     return
   }
+  if (statementCount(sql) > 1) {
+    renderError(result, 'Select a single statement: the database runs one statement at a time.')
+    return
+  }
+  running = true
   run.disabled = true
   try {
     renderGrid(result, await orca.plugin.request('query.run', { ref, sql }))
   } catch (error) {
     renderError(result, errorMessage(error))
   } finally {
+    running = false
     run.disabled = false
   }
 }

@@ -45,7 +45,14 @@ function spans(text: string): Span[] {
 }
 
 function body(text: string, span: Span): string {
-  return text.slice(span.start, span.end).replace(/;$/, '').trim()
+  const sql = text.slice(span.start, span.end).replace(/;$/, '').trim()
+  // A span of comments alone is not a statement.
+  return sql.replace(/--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g, '').trim() ? sql : ''
+}
+
+/** How many statements the text holds, ignoring blank and comment-only ones. */
+export function statementCount(text: string): number {
+  return spans(text).filter((span) => body(text, span)).length
 }
 
 /** The statement the cursor is in, or the one before it when the cursor sits between statements. */
@@ -66,7 +73,11 @@ export function statementAt(text: string, cursor: number): string | undefined {
   return undefined
 }
 
-const TABLE_QUERY = /^-- db-studio: connection=.+\nSELECT \* FROM [^;\n]+ LIMIT \d+\n?$/
+// One quoted name, optionally schema-qualified: no joins, no lists, nothing the person wrote.
+const QUOTED_NAME = '(?:"(?:[^"\\n]|"")+"|`(?:[^`\\n]|``)+`)'
+const TABLE_QUERY = new RegExp(
+  `^-- db-studio: connection=.+\\nSELECT \\* FROM ${QUOTED_NAME}(?:\\.${QUOTED_NAME})? LIMIT \\d+\\n?$`,
+)
 
 /** Whether the document is exactly what opening a table writes: safe to run on open. */
 export function isTableQuery(text: string): boolean {

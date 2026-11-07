@@ -1,6 +1,11 @@
 // Which SQL runs: the statement under the cursor, and the connection a document names.
 import { describe, expect, test } from 'vitest'
-import { connectionRef, isTableQuery, statementAt } from '../../src/editor/statements'
+import {
+  connectionRef,
+  isTableQuery,
+  statementAt,
+  statementCount,
+} from '../../src/editor/statements'
 
 describe('connectionRef', () => {
   test('reads the connection from the first line', () => {
@@ -58,9 +63,31 @@ describe('isTableQuery', () => {
 
   test('refuses anything the person wrote, so it never runs on open', () => {
     expect(isTableQuery('-- db-studio: connection=/a.db\nDELETE FROM t')).toBe(false)
+    expect(isTableQuery('-- db-studio: connection=/a.db\nSELECT * FROM big a, big b LIMIT 1')).toBe(
+      false,
+    )
     expect(
       isTableQuery('-- db-studio: connection=/a.db\nSELECT * FROM t LIMIT 1; DROP TABLE t'),
     ).toBe(false)
     expect(isTableQuery('SELECT * FROM t LIMIT 1')).toBe(false)
+  })
+})
+
+describe('statements that are only comments', () => {
+  test('a trailing comment is not a statement', () => {
+    expect(statementAt('select 1;\n-- todo', 17)).toBe('select 1')
+    expect(statementAt('select 1;\n/* later */', 20)).toBe('select 1')
+  })
+
+  test('a document of comments alone has nothing to run', () => {
+    expect(statementAt('-- db-studio: connection=/a.db\n-- todo', 38)).toBeUndefined()
+  })
+})
+
+describe('statementCount', () => {
+  test('counts statements, not semicolons or comments', () => {
+    expect(statementCount('SELECT 1')).toBe(1)
+    expect(statementCount('SELECT 1; -- done')).toBe(1)
+    expect(statementCount("DELETE FROM a; SELECT ';' FROM b;")).toBe(2)
   })
 })

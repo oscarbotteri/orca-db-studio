@@ -131,7 +131,12 @@ export interface WorkspaceQuestion {
 export const workspaceQuestion = atom<WorkspaceQuestion | null>(null)
 export const openError = atom<string | null>(null)
 
+let opening = false
+
 export async function openTable(table: TableRef, workspaceId?: string): Promise<void> {
+  // A double press must not write two documents.
+  if (opening) return
+  opening = true
   set(openError, null)
   try {
     const result = await plugin.request('table.open', {
@@ -145,6 +150,8 @@ export async function openTable(table: TableRef, workspaceId?: string): Promise<
   } catch (error) {
     set(workspaceQuestion, null)
     set(openError, errorMessage(error))
+  } finally {
+    opening = false
   }
 }
 

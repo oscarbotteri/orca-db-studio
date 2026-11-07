@@ -390,3 +390,19 @@ describe('query.run result ceiling', () => {
     expect(result.truncated).toBe(true)
   })
 })
+
+describe('query.run answer size', () => {
+  test('stops before the answer outgrows what the host accepts, and says so', async () => {
+    const { worker: w } = await startWithFocus([], null, { rowLimit: 5000 })
+    const ref = await shopRef(w)
+
+    const result = await w.request('query.run', {
+      ref,
+      sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000) SELECT i, printf('%.2000c', 'x') AS pad FROM n",
+    })
+
+    expect(result.truncated).toBe(true)
+    expect(result.rows.length).toBeLessThan(3000)
+    expect(JSON.stringify(result).length).toBeLessThan(900 * 1024)
+  })
+})
