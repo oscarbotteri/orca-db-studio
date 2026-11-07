@@ -32,7 +32,7 @@ DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB 
 
 ## Global Rules
 
-- After completing any task, verify with `npx tsc --noEmit`, `orca plugin validate .`, then lint and format (`npm run lint`, `npm run format`).
+- After completing any task, run `npm run verify` (typecheck, `orca plugin validate .`, lint, format check; fix formatting with `npm run format`).
 - No native modules or binaries — the Orca directory rejects them. Drivers must be pure JS, bundled into `vendor/`; SQLite uses `node:sqlite`.
 - An installed plugin cannot carry `node_modules`. Anything the worker needs at runtime must be bundled.
 - Every plugin file must be 1 MiB or less, and `vendor/` bundles are committed with the `build/` source that produces them. No `eval` or `new Function` in anything loaded by a frame.
@@ -45,7 +45,7 @@ DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB 
 ## Quality Gates
 
 - Run the narrowest useful test first, then broaden when shared behavior or public contracts changed.
-- Driver changes run the integration tests against all affected engines (Testcontainers), not just one.
+- Driver changes run `npm run test:drivers` (integration tests on real engines, Testcontainers) against all affected engines, not just one. It needs Docker and takes minutes on the first run while images pull, so run it in the background and read its log. `orca plugin test .` does not run it.
 - UI changes run `orca plugin test .` and `orca plugin check .`; use `orca plugin shot <key>` to look at the result.
 - Do not hide failing tests, lint, type, build, validation, or syntax errors.
 - Preserve public contracts (`protocol.ts`, the driver interface, manifest settings) unless the change intentionally updates them and the user accepted that scope.
@@ -53,6 +53,7 @@ DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB 
 ## Dev loop
 
 ```
+npm ci && npm run types    # a fresh worktree needs both before tsc or tests work
 orca plugin dev watch .     # load as dev plugin, reload on save
 orca plugin types .         # regenerate .orca/types
 orca plugin test .          # *.test.ts(x) with orca/testing

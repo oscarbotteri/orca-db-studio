@@ -19,7 +19,8 @@
     "check": "biome check .",
     "test": "orca plugin test .",
     "test:drivers": "vitest run --config test/vitest.config.ts",
-    "validate": "orca plugin validate ."
+    "validate": "orca plugin validate .",
+    "verify": "tsc --noEmit && orca plugin validate . && npm run lint && npm run format:check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",
