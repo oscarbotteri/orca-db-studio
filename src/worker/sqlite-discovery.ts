@@ -4,6 +4,7 @@ import { readdir } from 'node:fs/promises'
 import { extname, join, relative } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { FoundSqliteFile } from '../protocol'
+import { listLocalWorkspaces } from './local-workspaces'
 
 const EXTENSIONS = new Set(['.db', '.sqlite', '.sqlite3', '.db3'])
 const SKIPPED_DIRS = new Set(['node_modules', '.git'])
@@ -28,10 +29,8 @@ async function walk(dir: string, found: string[]): Promise<void> {
 }
 
 export async function findSqliteFiles(orca: OrcaWorkerApi): Promise<FoundSqliteFile[]> {
-  const { workspaces } = await orca.host.call('workspace.list')
   const files: FoundSqliteFile[] = []
-  // Remote workspaces live on another machine; their paths mean nothing here.
-  for (const workspace of workspaces.filter((w) => w.hostId === null)) {
+  for (const workspace of await listLocalWorkspaces(orca)) {
     const found: string[] = []
     await walk(workspace.path, found)
     for (const path of found.sort()) {

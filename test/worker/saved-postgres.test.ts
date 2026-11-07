@@ -33,7 +33,7 @@ test('tests, saves, browses and opens a table on a PostgreSQL connection', async
             name: 'api',
             path: join(root, 'api'),
             branch: 'main',
-            hostId: null,
+            hostId: 'local',
           },
         ],
         truncated: false,

@@ -39,7 +39,7 @@ async function start(workspaces: Workspace[] = []): Promise<TestWorker> {
     name: w.name,
     path: join(root, w.name),
     branch: 'main',
-    hostId: w.hostId ?? null,
+    hostId: w.hostId ?? 'local',
   }))
   const host = mockHost({
     results: { 'workspace.list': { workspaces: listed, truncated: false } },
@@ -193,7 +193,7 @@ async function startWithFocus(names: string[], focus: Focus | null, settings = {
     name,
     path: join(root, name),
     branch: 'main',
-    hostId: null,
+    hostId: 'local',
   }))
   for (const w of listed) await mkdir(w.path, { recursive: true })
   const host = mockHost({

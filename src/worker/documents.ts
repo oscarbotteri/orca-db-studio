@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { OpenTableResult } from '../protocol'
 import type { Connections } from './connections'
+import { listLocalWorkspaces } from './local-workspaces'
 
 const FOLDER = '.db-studio'
 /** The table query is a starting point; the person edits it. */
@@ -69,9 +70,7 @@ export async function openTable(
   connections: Connections,
   input: OpenTableInput,
 ): Promise<OpenTableResult> {
-  const { workspaces: listed } = await orca.host.call('workspace.list')
-  // Remote workspaces live on another machine; their paths mean nothing here.
-  const workspaces = listed.filter((w) => w.hostId === null)
+  const workspaces = await listLocalWorkspaces(orca)
   if (workspaces.length === 0) throw new Error('Open a workspace to open a table')
 
   const schema = await connections.quoteIdent(input.ref, input.schema)
