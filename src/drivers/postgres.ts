@@ -77,15 +77,25 @@ function describedCursor(
   const hooks = cursor as unknown as CursorHooks
   const described = new Promise<FieldDef[]>((resolve, reject) => {
     const { submit, handleRowDescription, handleError } = hooks
+    // The server answers the describe with row fields or with NoData, never both; whichever
+    // does not come must not stay registered on the connection the session keeps for its life.
+    let stopWaiting = () => {}
     hooks.submit = (connection) => {
       submit.call(cursor, connection)
-      ;(connection as NodeJS.EventEmitter).once('noData', () => resolve([]))
+      const emitter = connection as NodeJS.EventEmitter
+      function onNoData() {
+        resolve([])
+      }
+      emitter.once('noData', onNoData)
+      stopWaiting = () => emitter.off('noData', onNoData)
     }
     hooks.handleRowDescription = (message) => {
+      stopWaiting()
       handleRowDescription.call(cursor, message)
       resolve(message.fields)
     }
     hooks.handleError = (error) => {
+      stopWaiting()
       reject(error)
       handleError.call(cursor, error)
     }
@@ -149,9 +159,11 @@ class PostgresSession implements Session {
     return { schemas: [...schemas.values()] }
   }
 
-  async #setTimeout(timeoutMs: number): Promise<void> {
+  async #setTimeout(requested: number): Promise<void> {
+    // Whole milliseconds; anything unusable means no timeout.
+    const timeoutMs = Number.isFinite(requested) && requested > 0 ? Math.trunc(requested) : 0
     if (timeoutMs === this.#timeoutMs) return
-    await this.#client.query(`SET statement_timeout = ${Math.trunc(timeoutMs)}`)
+    await this.#client.query(`SET statement_timeout = ${timeoutMs}`)
     this.#timeoutMs = timeoutMs
   }
 
@@ -171,13 +183,16 @@ class PostgresSession implements Session {
     async function read(count: number): Promise<{ rows: Row[]; rowCount: number | null }> {
       session.#running = opts.queryId
       try {
-        const rows = (await cursor.read(count)) as Row[]
+        const { rows, rowCount } = await new Promise<{ rows: Row[]; rowCount: number | null }>(
+          (resolve, reject) => {
+            cursor.read(count, (error, batch, result) => {
+              if (error) reject(error)
+              else resolve({ rows: batch as Row[], rowCount: result.rowCount })
+            })
+          },
+        )
         if (rows.length < count) finished = true
-        return {
-          rows,
-          rowCount: (cursor as unknown as { _result: { rowCount: number | null } })._result
-            .rowCount,
-        }
+        return { rows, rowCount }
       } catch (error) {
         failed = true
         throw error

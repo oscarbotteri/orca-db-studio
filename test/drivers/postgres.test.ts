@@ -102,6 +102,25 @@ for (const image of VERSIONS) {
         ])
       })
 
+      test('many queries on one session leave no listeners behind', async () => {
+        const warnings: string[] = []
+        const onWarning = (warning: Error) => warnings.push(warning.name)
+        process.on('warning', onWarning)
+        try {
+          for (let i = 0; i < 15; i++) await fetchAll(session, 'SELECT 1')
+          await new Promise((resolve) => setImmediate(resolve))
+        } finally {
+          process.off('warning', onWarning)
+        }
+        expect(warnings).not.toContain('MaxListenersExceededWarning')
+      })
+
+      test('an unusable timeout is treated as no timeout', async () => {
+        const cursor = await session.query('SELECT 1', { queryId: 'nan', timeoutMs: Number.NaN })
+        expect(await cursor.fetch(10)).toEqual([[1]])
+        await cursor.close()
+      })
+
       test('a failing statement rejects with the database error', async () => {
         await expect(
           session.query('SELECT * FROM missing_table', { queryId: 'bad' }),
