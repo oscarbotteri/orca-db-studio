@@ -99,15 +99,17 @@ let connected = !needsChoice
 
 async function connect(chosen: string): Promise<void> {
   editor.change(connectionLineChange(editor.text(), chosen))
+  try {
+    await orca.plugin.request('connection.info', { ref: chosen })
+  } catch (error) {
+    // The chooser stays up so another connection can be picked.
+    chooser.setNotice(errorMessage(error))
+    return
+  }
   chooser.element.hidden = true
   result.replaceChildren()
   connected = true
-  try {
-    await orca.plugin.request('connection.info', { ref: chosen })
-    run.disabled = false
-  } catch (error) {
-    renderError(result, errorMessage(error))
-  }
+  run.disabled = false
 }
 
 const chooser = createConnectionChooser(sqliteFiles, (chosen) => void connect(chosen))
