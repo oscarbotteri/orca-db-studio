@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "node build/bundle-drivers.mjs",
+    "build:check": "npm run build && { test -z \"$(git status --porcelain -- vendor)\" || { git status --short -- vendor; echo 'vendor/ differs from a fresh build: run npm run build and commit'; exit 1; }; }",
     "types": "node build/orca-types.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
