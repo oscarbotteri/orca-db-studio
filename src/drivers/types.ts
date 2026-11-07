@@ -7,6 +7,9 @@ export interface SqliteConfig {
   path: string
 }
 
+/** The SQL flavour an editor highlights for. */
+export type SqlDialect = 'sqlite'
+
 export type ConnectionConfig = SqliteConfig
 
 export interface Driver {
@@ -39,6 +42,7 @@ export interface ColumnMeta {
 export type Row = unknown[]
 
 export interface Session {
+  readonly dialect: SqlDialect
   listObjects(): Promise<SchemaTree>
   query(sql: string, opts: QueryOptions): Promise<QueryCursor>
   cancel(queryId: string): Promise<void>

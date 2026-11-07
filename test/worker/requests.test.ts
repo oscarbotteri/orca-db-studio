@@ -1,6 +1,6 @@
 // Seam B: the worker driven only through its protocol requests, on a faked Orca host and real
 // SQLite files in temporary workspaces.
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -177,5 +177,201 @@ describe('Open SQLite File command', () => {
     expect(message).toBe('Choose a SQLite file in the DB Studio panel.')
     expect(host.data().storage[CHOOSER_REQUEST_KEY]).toBe(true)
     expect(w.posts).toContainEqual({ event: 'sqlite.chooserRequested', payload: {} })
+  })
+})
+
+interface Focus {
+  branch: string
+  displayName: string
+}
+
+/** A host with real workspace folders, the focused one answering workspace.readContext. */
+async function startWithFocus(names: string[], focus: Focus | null, settings = {}) {
+  const listed = names.map((name) => ({
+    id: `id-${name}`,
+    kind: 'worktree' as const,
+    name,
+    path: join(root, name),
+    branch: 'main',
+    hostId: null,
+  }))
+  for (const w of listed) await mkdir(w.path, { recursive: true })
+  const host = mockHost({
+    settings,
+    results: {
+      'workspace.list': { workspaces: listed, truncated: false },
+      'workspace.readContext': focus && { ...focus, terminals: [] },
+      'editor.open': { opened: true },
+    },
+  })
+  return { host, worker: await mountWorker(worker, { host }) }
+}
+
+async function shopRef(w: TestWorker): Promise<string> {
+  const path = await createDatabase(
+    join(root, 'shop.db'),
+    'CREATE TABLE orders (id INTEGER); INSERT INTO orders VALUES (1),(2),(3),(4),(5); CREATE TABLE "we""ird" (id INTEGER)',
+  )
+  return (await w.request('sqlite.add', { path })).ref
+}
+
+describe('table.open', () => {
+  test('writes a query document into .db-studio/ of the focused workspace and opens it', async () => {
+    const { host, worker: w } = await startWithFocus(['api', 'web'], {
+      branch: 'main',
+      displayName: 'web',
+    })
+    const ref = await shopRef(w)
+
+    const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(await readFile(join(root, 'web', '.db-studio', 'orders.sql'), 'utf8')).toBe(
+      `-- db-studio: connection=${ref}\nSELECT * FROM "main"."orders" LIMIT 100\n`,
+    )
+    expect(host.callsOf('editor.open')).toEqual([
+      { workspaceId: 'id-web', path: '.db-studio/orders.sql' },
+    ])
+  })
+
+  test('makes .db-studio/ ignore itself and never touches the repo .gitignore', async () => {
+    const { worker: w } = await startWithFocus(['api'], { branch: 'main', displayName: 'api' })
+    await writeFile(join(root, 'api', '.gitignore'), 'dist\n')
+    const ref = await shopRef(w)
+
+    await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(await readFile(join(root, 'api', '.db-studio', '.gitignore'), 'utf8')).toBe('*\n')
+    expect(await readFile(join(root, 'api', '.gitignore'), 'utf8')).toBe('dist\n')
+  })
+
+  test('quotes table names and does not overwrite an earlier document', async () => {
+    const { worker: w } = await startWithFocus(['api'], { branch: 'main', displayName: 'api' })
+    const ref = await shopRef(w)
+
+    await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+    const second = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+    await w.request('table.open', { ref, schema: 'main', table: 'we"ird' })
+
+    expect(second).toEqual({ status: 'opened', path: '.db-studio/orders-2.sql' })
+    expect(await readFile(join(root, 'api', '.db-studio', 'we_ird.sql'), 'utf8')).toContain(
+      'SELECT * FROM "main"."we""ird" LIMIT 100',
+    )
+  })
+
+  test('asks the panel to choose when the focused workspace is ambiguous', async () => {
+    const { host, worker: w } = await startWithFocus(['api', 'web'], null)
+    const ref = await shopRef(w)
+
+    const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(result).toEqual({
+      status: 'choose-workspace',
+      workspaces: [
+        { id: 'id-api', name: 'api' },
+        { id: 'id-web', name: 'web' },
+      ],
+    })
+    expect(host.callsOf('editor.open')).toEqual([])
+  })
+
+  test('uses the workspace the person chose', async () => {
+    const { worker: w } = await startWithFocus(['api', 'web'], null)
+    const ref = await shopRef(w)
+
+    const result = await w.request('table.open', {
+      ref,
+      schema: 'main',
+      table: 'orders',
+      workspaceId: 'id-api',
+    })
+
+    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(await readFile(join(root, 'api', '.db-studio', 'orders.sql'), 'utf8')).toContain(
+      'LIMIT 100',
+    )
+  })
+
+  test('fails clearly when no workspace is open', async () => {
+    const { worker: w } = await startWithFocus([], null)
+    const ref = await shopRef(w)
+
+    await expect(w.request('table.open', { ref, schema: 'main', table: 'orders' })).rejects.toThrow(
+      'Open a workspace to open a table',
+    )
+  })
+
+  test('refuses a connection that was never added', async () => {
+    const { worker: w } = await startWithFocus(['api'], { branch: 'main', displayName: 'api' })
+
+    await expect(
+      w.request('table.open', { ref: '/nope.db', schema: 'main', table: 'orders' }),
+    ).rejects.toThrow('No connection /nope.db')
+  })
+})
+
+describe('query.run', () => {
+  async function runner(settings = {}) {
+    const { worker: w } = await startWithFocus([], null, settings)
+    return { w, ref: await shopRef(w) }
+  }
+
+  test('returns the columns and rows of a statement', async () => {
+    const { w, ref } = await runner()
+
+    const result = await w.request('query.run', {
+      ref,
+      sql: 'SELECT id FROM orders WHERE id < 3 ORDER BY id',
+    })
+
+    expect(result).toEqual({
+      columns: ['id'],
+      rows: [[1], [2]],
+      truncated: false,
+    })
+  })
+
+  test('cuts a statement at the row limit and says so', async () => {
+    const { w, ref } = await runner({ rowLimit: 3 })
+
+    const result = await w.request('query.run', { ref, sql: 'SELECT id FROM orders' })
+
+    expect(result.rows).toEqual([[1], [2], [3]])
+    expect(result.truncated).toBe(true)
+  })
+
+  test('does not report a cut-off when the rows fit exactly', async () => {
+    const { w, ref } = await runner({ rowLimit: 5 })
+
+    const result = await w.request('query.run', { ref, sql: 'SELECT id FROM orders' })
+
+    expect(result.rows).toHaveLength(5)
+    expect(result.truncated).toBe(false)
+  })
+
+  test('shows the database error for a failing statement', async () => {
+    const { w, ref } = await runner()
+
+    await expect(w.request('query.run', { ref, sql: 'SELECT * FROM missing' })).rejects.toThrow(
+      /no such table: missing/,
+    )
+  })
+
+  test('runs the next statement after a failure on the same connection', async () => {
+    const { w, ref } = await runner()
+    await expect(w.request('query.run', { ref, sql: 'SELEC 1' })).rejects.toThrow()
+
+    const result = await w.request('query.run', { ref, sql: 'SELECT 1 AS one' })
+
+    expect(result.rows).toEqual([[1]])
+  })
+})
+
+describe('connection.info', () => {
+  test("names the connection's SQL dialect for the editor", async () => {
+    const { worker: w } = await startWithFocus([], null)
+    const ref = await shopRef(w)
+
+    expect(await w.request('connection.info', { ref })).toEqual({ dialect: 'sqlite' })
   })
 })

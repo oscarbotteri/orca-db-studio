@@ -2,8 +2,9 @@
 import { basename, dirname, isAbsolute, normalize } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import { loadDriver } from '../drivers/registry'
-import type { ConnectionConfig, SchemaTree, Session } from '../drivers/types'
-import type { ConnectionEntry, ConnectionList } from '../protocol'
+import type { ConnectionConfig, SchemaTree, Session, SqlDialect } from '../drivers/types'
+import type { ConnectionEntry, ConnectionList, QueryResult } from '../protocol'
+import { runStatement } from './query-engine'
 
 /** The registry keeps a SQLite file's path and nothing else. */
 const SQLITE_FILES_KEY = 'sqlite-files'
@@ -12,6 +13,9 @@ export interface Connections {
   list(): Promise<ConnectionList>
   addSqliteFile(path: string): Promise<ConnectionEntry>
   listObjects(ref: string): Promise<SchemaTree>
+  dialect(ref: string): Promise<SqlDialect>
+  quoteIdent(ref: string, name: string): Promise<string>
+  runQuery(ref: string, sql: string, rowLimit: number): Promise<QueryResult>
   closeAll(): Promise<void>
 }
 
@@ -71,6 +75,15 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
     },
     async listObjects(ref) {
       return (await session(ref, await configFor(orca, ref))).listObjects()
+    },
+    async dialect(ref) {
+      return (await session(ref, await configFor(orca, ref))).dialect
+    },
+    async quoteIdent(ref, name) {
+      return (await session(ref, await configFor(orca, ref))).quoteIdent(name)
+    },
+    async runQuery(ref, sql, rowLimit) {
+      return runStatement(await session(ref, await configFor(orca, ref)), sql, rowLimit)
     },
     async closeAll() {
       const open = [...sessions.values()]

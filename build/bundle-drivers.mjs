@@ -1,6 +1,6 @@
 // Bundles pg and mysql2 into vendor/ with esbuild and writes license notices. Run via `npm run build`.
 // Fails when a plugin file is over 1 MiB or a frame bundle contains eval or new Function.
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { build } from 'esbuild'
 
@@ -130,6 +130,8 @@ async function main() {
     for (const dir of bundledPackages(await bundle(entry))) packages.add(dir)
   }
   await writeNotices([...packages].sort())
+  // The editor entry only re-exports, so it doubles as the declarations a frame imports against.
+  await copyFile(join(ENTRIES, 'codemirror.ts'), join(VENDOR, 'codemirror.d.ts'))
 
   for (const { name, kind } of BUNDLES) {
     if (kind === 'frame') checkDynamicCode(name, await readFile(join(VENDOR, `${name}.js`), 'utf8'))

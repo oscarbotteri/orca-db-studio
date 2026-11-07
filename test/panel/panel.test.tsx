@@ -123,3 +123,67 @@ describe('SQLite file chooser', () => {
     expect(p.find({ label: 'app.db' })).not.toBeNull()
   })
 })
+
+describe('opening a table', () => {
+  const tree = { role: 'tree' }
+  const connectionKey = JSON.stringify(['connection', SHOP.ref])
+  const ordersKey = JSON.stringify(['object', SHOP.ref, 'main', 'orders'])
+
+  async function mountShop(open: (input: unknown) => unknown) {
+    const host = mockHost({
+      requests: {
+        'connections.list': { sqliteFiles: [SHOP] },
+        'explorer.listObjects': {
+          schemas: [{ name: 'main', objects: [{ name: 'orders', kind: 'table' }] }],
+        },
+        'table.open': open as never,
+      },
+    })
+    const p = await mount(panel, {
+      host,
+      persisted: {
+        plugin: {
+          'explorer-expanded': [connectionKey, JSON.stringify(['schema', SHOP.ref, 'main'])],
+        },
+      },
+    })
+    return { host, p }
+  }
+
+  test('asks the worker to open the table that was activated', async () => {
+    const { host, p } = await mountShop(() => ({ status: 'opened', path: '.db-studio/orders.sql' }))
+
+    await p.activateItem(tree, ordersKey)
+
+    expect(host.callsOf('plugin.request')).toContainEqual({
+      name: 'table.open',
+      input: { ref: SHOP.ref, schema: 'main', table: 'orders' },
+    })
+  })
+
+  test('offers the workspaces when the worker cannot pick one, then opens in the chosen one', async () => {
+    const calls: unknown[] = []
+    const { p } = await mountShop((input) => {
+      calls.push(input)
+      return calls.length === 1
+        ? { status: 'choose-workspace', workspaces: [{ id: 'w1', name: 'api' }] }
+        : { status: 'opened', path: '.db-studio/orders.sql' }
+    })
+
+    await p.activateItem(tree, ordersKey)
+    await p.press({ label: 'api' })
+
+    expect(calls[1]).toEqual({ ref: SHOP.ref, schema: 'main', table: 'orders', workspaceId: 'w1' })
+    expect(p.find({ text: /Open in which workspace/ })).toBeNull()
+  })
+
+  test('shows why the table could not be opened', async () => {
+    const { p } = await mountShop(() => {
+      throw hostError('action_failed', 'Open a workspace to open a table')
+    })
+
+    await p.activateItem(tree, ordersKey)
+
+    expect(p.find({ text: /Open a workspace to open a table/ })).not.toBeNull()
+  })
+})

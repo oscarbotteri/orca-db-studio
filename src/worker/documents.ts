@@ -1,2 +1,99 @@
 // Creates query documents in .db-studio/ and opens them with editor.open. E1, ADR 0003
-export {}
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { OrcaWorkerApi } from 'orca/worker'
+import type { OpenTableResult } from '../protocol'
+import type { Connections } from './connections'
+
+const FOLDER = '.db-studio'
+/** The table query is a starting point; the person edits it. */
+const TABLE_QUERY_LIMIT = 100
+
+interface Workspace {
+  id: string
+  name: string
+  path: string
+  branch: string | null
+}
+
+export interface OpenTableInput {
+  ref: string
+  schema: string
+  table: string
+  workspaceId?: string
+}
+
+/** The focused workspace when it matches exactly one workspace of the list. */
+async function focusedWorkspace(
+  orca: OrcaWorkerApi,
+  workspaces: Workspace[],
+): Promise<Workspace | undefined> {
+  const context = await orca.host.call('workspace.readContext')
+  if (!context) return undefined
+  const matches = workspaces.filter(
+    (w) => w.name === context.displayName && w.branch === context.branch,
+  )
+  return matches.length === 1 ? matches[0] : undefined
+}
+
+async function targetWorkspace(
+  orca: OrcaWorkerApi,
+  workspaces: Workspace[],
+  workspaceId: string | undefined,
+): Promise<Workspace | undefined> {
+  if (workspaceId === undefined) return focusedWorkspace(orca, workspaces)
+  const chosen = workspaces.find((w) => w.id === workspaceId)
+  if (!chosen) throw new Error('That workspace is no longer open')
+  return chosen
+}
+
+function fileStem(table: string): string {
+  return table.replace(/[^\w.-]+/g, '_') || 'table'
+}
+
+/** Writes the document under the first free name: `orders.sql`, `orders-2.sql`, ... */
+async function writeDocument(dir: string, stem: string, content: string): Promise<string> {
+  for (let n = 1; ; n++) {
+    const name = n === 1 ? `${stem}.sql` : `${stem}-${n}.sql`
+    try {
+      await writeFile(join(dir, name), content, { flag: 'wx' })
+      return name
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+  }
+}
+
+export async function openTable(
+  orca: OrcaWorkerApi,
+  connections: Connections,
+  input: OpenTableInput,
+): Promise<OpenTableResult> {
+  const { workspaces: listed } = await orca.host.call('workspace.list')
+  // Remote workspaces live on another machine; their paths mean nothing here.
+  const workspaces = listed.filter((w) => w.hostId === null)
+  if (workspaces.length === 0) throw new Error('Open a workspace to open a table')
+
+  const schema = await connections.quoteIdent(input.ref, input.schema)
+  const table = await connections.quoteIdent(input.ref, input.table)
+  const target = await targetWorkspace(orca, workspaces, input.workspaceId)
+  if (!target) {
+    return {
+      status: 'choose-workspace',
+      workspaces: workspaces.map((w) => ({ id: w.id, name: w.name })),
+    }
+  }
+
+  const dir = join(target.path, FOLDER)
+  await mkdir(dir, { recursive: true })
+  // The folder ignores itself, so the repo's own .gitignore is never touched.
+  await writeFile(join(dir, '.gitignore'), '*\n')
+  const name = await writeDocument(
+    dir,
+    fileStem(input.table),
+    `-- db-studio: connection=${input.ref}\nSELECT * FROM ${schema}.${table} LIMIT ${TABLE_QUERY_LIMIT}\n`,
+  )
+  const path = `${FOLDER}/${name}`
+  await orca.host.call('editor.open', { workspaceId: target.id, path })
+  return { status: 'opened', path }
+}

@@ -4,6 +4,7 @@ import {
   CHOOSER_REQUEST_KEY,
   type ConnectionList,
   type FoundSqliteFile,
+  type WorkspaceChoice,
   type SchemaTree,
 } from '../protocol'
 
@@ -113,4 +114,40 @@ export async function addSqliteFile(path: string): Promise<void> {
   } finally {
     set(adding, false)
   }
+}
+
+export interface TableRef {
+  ref: string
+  schema: string
+  table: string
+}
+
+/** A table waiting for the person to say which workspace gets its query document. */
+export interface WorkspaceQuestion {
+  table: TableRef
+  workspaces: WorkspaceChoice[]
+}
+
+export const workspaceQuestion = atom<WorkspaceQuestion | null>(null)
+export const openError = atom<string | null>(null)
+
+export async function openTable(table: TableRef, workspaceId?: string): Promise<void> {
+  set(openError, null)
+  try {
+    const result = await plugin.request('table.open', {
+      ...table,
+      ...(workspaceId === undefined ? {} : { workspaceId }),
+    })
+    set(
+      workspaceQuestion,
+      result.status === 'opened' ? null : { table, workspaces: result.workspaces },
+    )
+  } catch (error) {
+    set(workspaceQuestion, null)
+    set(openError, errorMessage(error))
+  }
+}
+
+export function cancelWorkspaceQuestion(): void {
+  set(workspaceQuestion, null)
 }

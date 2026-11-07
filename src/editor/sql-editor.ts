@@ -1,2 +1,83 @@
 // SQL editor on CodeMirror 6 (ADR 0001). Q1
-export {}
+import {
+  autocompletion,
+  completionKeymap,
+  defaultHighlightStyle,
+  defaultKeymap,
+  EditorState,
+  EditorView,
+  history,
+  historyKeymap,
+  keymap,
+  lineNumbers,
+  MariaSQL,
+  MySQL,
+  PostgreSQL,
+  SQLite,
+  sql,
+  syntaxHighlighting,
+} from '../../vendor/codemirror.js'
+import type { SqlDialect } from '../protocol'
+
+const DIALECTS = { sqlite: SQLite, postgres: PostgreSQL, mysql: MySQL, mariadb: MariaSQL }
+
+export interface SqlEditorOptions {
+  parent: HTMLElement
+  text: string
+  readOnly: boolean
+  dialect: SqlDialect
+  onChange(text: string): void
+  /** Mod-Enter: run the selection, or the statement under the cursor. */
+  onRun(): void
+}
+
+export interface SqlEditor {
+  text(): string
+  /** The selected text, or undefined when nothing is selected. */
+  selection(): string | undefined
+  cursor(): number
+  replace(text: string): void
+}
+
+export function createSqlEditor(options: SqlEditorOptions): SqlEditor {
+  const view = new EditorView({
+    parent: options.parent,
+    state: EditorState.create({
+      doc: options.text,
+      extensions: [
+        lineNumbers(),
+        history(),
+        autocompletion(),
+        sql({ dialect: DIALECTS[options.dialect] }),
+        syntaxHighlighting(defaultHighlightStyle),
+        EditorState.readOnly.of(options.readOnly),
+        keymap.of([
+          {
+            key: 'Mod-Enter',
+            run: () => {
+              options.onRun()
+              return true
+            },
+          },
+          ...completionKeymap,
+          ...historyKeymap,
+          ...defaultKeymap,
+        ]),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) options.onChange(update.state.doc.toString())
+        }),
+      ],
+    }),
+  })
+  return {
+    text: () => view.state.doc.toString(),
+    selection() {
+      const { from, to } = view.state.selection.main
+      return from === to ? undefined : view.state.sliceDoc(from, to)
+    },
+    cursor: () => view.state.selection.main.head,
+    replace(text) {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } })
+    },
+  }
+}

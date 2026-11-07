@@ -13,16 +13,32 @@ import {
   type TreeItem,
 } from 'orca'
 import type { ConnectionEntry, SchemaNode } from '../protocol'
+import { WorkspacePicker } from './workspace-picker'
 import {
   connectionKey,
   connections,
   expanded,
   objects,
   openChooser,
+  openError,
+  openTable,
   schemaKey,
+  type TableRef,
   toggle,
   treeKey,
 } from './state'
+
+/** Tree key of a table, which carries what opening it needs. */
+function objectKey(ref: string, schema: string, table: string): string {
+  return treeKey('object', ref, schema, table)
+}
+
+function tableOfKey(key: string): TableRef | undefined {
+  const parts: unknown = JSON.parse(key)
+  if (!Array.isArray(parts) || parts[0] !== 'object') return undefined
+  const [, ref, schema, table] = parts
+  return { ref, schema, table }
+}
 
 function schemaItem(ref: string, schema: SchemaNode): TreeItem {
   return {
@@ -30,7 +46,7 @@ function schemaItem(ref: string, schema: SchemaNode): TreeItem {
     label: schema.name,
     icon: 'layers',
     children: schema.objects.map((object) => ({
-      key: treeKey('object', ref, schema.name, object.name),
+      key: objectKey(ref, schema.name, object.name),
       label: object.name,
       icon: object.kind === 'view' ? 'file-text' : 'file',
       ...(object.kind === 'view' ? { description: 'view' } : {}),
@@ -82,6 +98,10 @@ function SqliteTree({ entries }: SqliteTreeProps) {
       items={entries.map(connectionItem)}
       expanded={read(expanded)}
       onToggle={({ key, expanded: isExpanded }) => toggle(key, isExpanded)}
+      onAction={({ key }) => {
+        const table = tableOfKey(key)
+        if (table) void openTable(table)
+      }}
     />
   )
 }
@@ -94,6 +114,12 @@ export function SqliteFiles() {
         <Heading level={3}>SQLite files</Heading>
         <IconButton icon="add" label="Open SQLite file" variant="ghost" onPress={openChooser} />
       </Row>
+      <WorkspacePicker />
+      {read(openError) ? (
+        <Callout tone="danger" title="Could not open the table">
+          {read(openError)}
+        </Callout>
+      ) : null}
       {list.status === 'loading' ? <Skeleton lines={2} label="Loading connections" /> : null}
       {list.status === 'error' ? (
         <Callout tone="danger" title="Could not load connections">

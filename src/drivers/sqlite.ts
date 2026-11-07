@@ -56,6 +56,8 @@ function startThread(path: string): Thread {
 }
 
 class SqliteSession implements Session {
+  readonly dialect = 'sqlite'
+
   #thread: Thread | undefined
   /** The query whose call is running in the thread, which cancel may stop. */
   #running: string | undefined

@@ -1,0 +1,74 @@
+// Which SQL a run covers. Q1
+const HEADER = /^-- db-studio: connection=(.+)$/
+
+/** The connection a query document names on its first line. */
+export function connectionRef(text: string): string | undefined {
+  const firstLine = text.split('\n', 1)[0] ?? ''
+  return HEADER.exec(firstLine.trimEnd())?.[1]
+}
+
+interface Span {
+  start: number
+  /** Past the closing semicolon, when there is one. */
+  end: number
+}
+
+function closingIndex(text: string, from: number, closer: string): number {
+  const at = text.indexOf(closer, from)
+  return at === -1 ? text.length : at + closer.length
+}
+
+/** Splits at semicolons outside strings, quoted names and comments. */
+function spans(text: string): Span[] {
+  const found: Span[] = []
+  let start = 0
+  let i = 0
+  while (i < text.length) {
+    const char = text[i]
+    if (char === "'" || char === '"' || char === '`') {
+      // A doubled quote is an escaped one: it closes and reopens, which this loop does too.
+      i = closingIndex(text, i + 1, char)
+    } else if (char === '-' && text[i + 1] === '-') {
+      i = closingIndex(text, i, '\n')
+    } else if (char === '/' && text[i + 1] === '*') {
+      i = closingIndex(text, i + 2, '*/')
+    } else if (char === ';') {
+      found.push({ start, end: i + 1 })
+      start = i + 1
+      i++
+    } else {
+      i++
+    }
+  }
+  found.push({ start, end: text.length })
+  return found
+}
+
+function body(text: string, span: Span): string {
+  return text.slice(span.start, span.end).replace(/;$/, '').trim()
+}
+
+/** The statement the cursor is in, or the one before it when the cursor sits between statements. */
+export function statementAt(text: string, cursor: number): string | undefined {
+  const all = spans(text)
+  const inside = all.findIndex((s) => cursor >= s.start && cursor <= s.end)
+  const span = all[inside]
+  // Blank space ahead of a statement belongs to the one before it.
+  const leading = span
+    ? span.start + (/^\s*/.exec(text.slice(span.start, span.end))?.[0].length ?? 0)
+    : 0
+  const first = inside > 0 && cursor < leading ? inside - 1 : inside
+  for (let i = inside === -1 ? all.length - 1 : first; i >= 0; i--) {
+    const candidate = all[i]
+    const sql = candidate && body(text, candidate)
+    if (sql) return sql
+  }
+  return undefined
+}
+
+const TABLE_QUERY = /^-- db-studio: connection=.+\nSELECT \* FROM [^;\n]+ LIMIT \d+\n?$/
+
+/** Whether the document is exactly what opening a table writes: safe to run on open. */
+export function isTableQuery(text: string): boolean {
+  return TABLE_QUERY.test(text)
+}
