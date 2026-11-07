@@ -375,3 +375,18 @@ describe('connection.info', () => {
     expect(await w.request('connection.info', { ref })).toEqual({ dialect: 'sqlite' })
   })
 })
+
+describe('query.run result ceiling', () => {
+  test('never returns more than 5000 rows, whatever rowLimit says', async () => {
+    const { worker: w } = await startWithFocus([], null, { rowLimit: 100000 })
+    const ref = await shopRef(w)
+
+    const result = await w.request('query.run', {
+      ref,
+      sql: 'WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 6000) SELECT i FROM n',
+    })
+
+    expect(result.rows).toHaveLength(5000)
+    expect(result.truncated).toBe(true)
+  })
+})

@@ -1,4 +1,5 @@
 // Query document editor: a custom editor for .sql files. Q1, G1, ADR 0003
+import type { SqlDialect } from '../protocol'
 import { renderError, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
 import { connectionRef, isTableQuery, statementAt } from './statements'
@@ -55,7 +56,7 @@ const result = div('result')
 document.body.append(toolbar, editorHost, result)
 
 const ref = connectionRef(doc.value)
-let dialect: 'sqlite' | undefined
+let dialect: SqlDialect | undefined
 let failure: string | undefined
 if (ref === undefined) {
   failure = 'This file names no connection. Its first line should be -- db-studio: connection=<ref>'

@@ -5,6 +5,8 @@ import { openTable } from './documents'
 import { findSqliteFiles } from './sqlite-discovery'
 
 const DEFAULT_ROW_LIMIT = 100
+/** A worker answer is at most 1 MiB, so no setting can ask for more rows than this. */
+const RESULT_CEILING_ROWS = 5000
 
 let connections: Connections | undefined
 
@@ -21,7 +23,10 @@ export default function activate(orca: OrcaWorkerApi): void {
   }))
   orca.panels.handle('query.run', async ({ ref, sql }) => {
     const limit = await orca.settings.get('rowLimit')
-    const rowLimit = typeof limit === 'number' && limit >= 1 ? limit : DEFAULT_ROW_LIMIT
+    const rowLimit =
+      typeof limit === 'number' && limit >= 1
+        ? Math.min(limit, RESULT_CEILING_ROWS)
+        : DEFAULT_ROW_LIMIT
     return registry.runQuery(ref, sql, rowLimit)
   })
 

@@ -87,7 +87,9 @@ export async function openTable(
   const dir = join(target.path, FOLDER)
   await mkdir(dir, { recursive: true })
   // The folder ignores itself, so the repo's own .gitignore is never touched.
-  await writeFile(join(dir, '.gitignore'), '*\n')
+  await writeFile(join(dir, '.gitignore'), '*\n', { flag: 'wx' }).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  })
   const name = await writeDocument(
     dir,
     fileStem(input.table),
