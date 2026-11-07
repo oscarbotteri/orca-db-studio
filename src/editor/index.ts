@@ -1,8 +1,15 @@
 // Query document editor: a custom editor for .sql files. Q1, G1, ADR 0003
 import type { SqlDialect } from '../protocol'
+import { createConnectionChooser } from './connection-chooser'
 import { renderError, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
-import { connectionRef, isTableQuery, statementAt, statementCount } from './statements'
+import {
+  connectionLineChange,
+  connectionRef,
+  isTableQuery,
+  statementAt,
+  statementCount,
+} from './statements'
 
 const STYLE = `
   html, body { margin: 0; height: 100%; }
@@ -13,6 +20,12 @@ const STYLE = `
   .toolbar button { font: inherit; color: inherit; background: transparent; cursor: pointer;
     border: 1px solid var(--orca-border); border-radius: 4px; padding: 2px 10px; }
   .toolbar .hint { opacity: .6; }
+  .chooser { display: flex; gap: 8px; align-items: center; padding: 6px 10px;
+    border-bottom: 1px solid var(--orca-border); }
+  .chooser[hidden] { display: none; }
+  .chooser select { font: inherit; color: inherit; background: var(--orca-background);
+    border: 1px solid var(--orca-border); border-radius: 4px; padding: 2px 6px; }
+  .chooser .notice { padding: 0; border: 0; }
   .editor { flex: 0 0 40%; overflow: auto; border-bottom: 1px solid var(--orca-border); }
   .editor .cm-editor { height: 100%; background: var(--orca-background); color: var(--orca-foreground); }
   .result { flex: 1; overflow: auto; }
@@ -27,8 +40,7 @@ const STYLE = `
   .grid td.null { opacity: .5; font-style: italic; }
 `
 
-const NO_CONNECTION =
-  'This file names no connection. Its first line should be -- db-studio: connection=<ref>'
+const NO_CONNECTION = 'Choose a connection to run this file.'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -59,11 +71,12 @@ const result = div('result')
 document.body.append(toolbar, editorHost, result)
 
 const ref = connectionRef(doc.value)
+const { sqliteFiles } = await orca.plugin.request('connections.list')
+// A connection to choose: the file names none, or names one the registry no longer holds.
+const needsChoice = ref === undefined || !sqliteFiles.some((entry) => entry.ref === ref)
 let dialect: SqlDialect | undefined
 let failure: string | undefined
-if (ref === undefined) {
-  failure = NO_CONNECTION
-} else {
+if (ref !== undefined && !needsChoice) {
   try {
     dialect = (await orca.plugin.request('connection.info', { ref })).dialect
   } catch (error) {
@@ -82,10 +95,31 @@ const editor = createSqlEditor({
 doc.onReplace((value) => editor.replace(value))
 
 let running = false
+let connected = !needsChoice
+
+async function connect(chosen: string): Promise<void> {
+  editor.change(connectionLineChange(editor.text(), chosen))
+  chooser.element.hidden = true
+  result.replaceChildren()
+  connected = true
+  try {
+    await orca.plugin.request('connection.info', { ref: chosen })
+    run.disabled = false
+  } catch (error) {
+    renderError(result, errorMessage(error))
+  }
+}
+
+const chooser = createConnectionChooser(sqliteFiles, (chosen) => void connect(chosen))
+chooser.element.hidden = !needsChoice
+if (ref !== undefined && needsChoice) {
+  chooser.setNotice(`The connection ${ref} no longer exists. Choose another.`)
+}
+toolbar.after(chooser.element)
 
 async function execute(): Promise<void> {
   // Mod-Enter bypasses the disabled button; a second run would race the first.
-  if (running) return
+  if (running || !connected) return
   const ref = connectionRef(editor.text())
   if (ref === undefined) {
     renderError(result, NO_CONNECTION)
@@ -114,7 +148,9 @@ async function execute(): Promise<void> {
 
 run.addEventListener('click', () => void execute())
 
-if (failure !== undefined) {
+if (needsChoice) {
+  run.disabled = true
+} else if (failure !== undefined) {
   renderError(result, failure)
   run.disabled = true
 } else if (isTableQuery(doc.value)) {

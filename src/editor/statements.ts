@@ -1,10 +1,25 @@
 // Which SQL a run covers. Q1
+const HEADER_PREFIX = '-- db-studio: connection='
 const HEADER = /^-- db-studio: connection=(.+)$/
 
 /** The connection a query document names on its first line. */
 export function connectionRef(text: string): string | undefined {
   const firstLine = text.split('\n', 1)[0] ?? ''
   return HEADER.exec(firstLine.trimEnd())?.[1]
+}
+
+export interface TextChange {
+  from: number
+  to: number
+  insert: string
+}
+
+/** The edit that makes `ref` the document's connection: a new first line, or the stale one replaced. */
+export function connectionLineChange(text: string, ref: string): TextChange {
+  const line = `-- db-studio: connection=${ref}`
+  const firstLine = text.split('\n', 1)[0] ?? ''
+  if (firstLine.startsWith(HEADER_PREFIX)) return { from: 0, to: firstLine.length, insert: line }
+  return { from: 0, to: 0, insert: `${line}\n` }
 }
 
 interface Span {

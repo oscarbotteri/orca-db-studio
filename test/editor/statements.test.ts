@@ -1,6 +1,7 @@
 // Which SQL runs: the statement under the cursor, and the connection a document names.
 import { describe, expect, test } from 'vitest'
 import {
+  connectionLineChange,
   connectionRef,
   isTableQuery,
   statementAt,
@@ -17,6 +18,37 @@ describe('connectionRef', () => {
   test('is undefined when the first line does not name one', () => {
     expect(connectionRef('SELECT 1\n-- db-studio: connection=/a.db')).toBeUndefined()
     expect(connectionRef('')).toBeUndefined()
+  })
+})
+
+describe('connectionLineChange', () => {
+  test('puts the line first when the file names no connection', () => {
+    expect(connectionLineChange('SELECT 1', '/a.db')).toEqual({
+      from: 0,
+      to: 0,
+      insert: '-- db-studio: connection=/a.db\n',
+    })
+  })
+
+  test('writes the line into an empty file', () => {
+    expect(connectionLineChange('', '/a.db')).toEqual({
+      from: 0,
+      to: 0,
+      insert: '-- db-studio: connection=/a.db\n',
+    })
+  })
+
+  test('replaces a stale line instead of stacking another', () => {
+    expect(connectionLineChange('-- db-studio: connection=/gone.db\nSELECT 1', '/a.db')).toEqual({
+      from: 0,
+      to: 33,
+      insert: '-- db-studio: connection=/a.db',
+    })
+  })
+
+  test('keeps a first line that is not a header', () => {
+    const change = connectionLineChange('-- notes\nSELECT 1', '/a.db')
+    expect(change.to).toBe(0)
   })
 })
 
