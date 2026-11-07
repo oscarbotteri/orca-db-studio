@@ -2,6 +2,7 @@
 // buffered whole. Cancel runs pg_cancel_backend from a second connection; a timeout is the
 // server's statement_timeout, so the server ends the query itself.
 import type { ClientConfig, FieldDef } from 'pg'
+import { formatSize } from './format-size'
 import type {
   ColumnMeta,
   ConnectionConfig,
@@ -23,12 +24,6 @@ const OID_TIMESTAMPTZ = 1184
 const OID_BYTEA = 17
 const OID_JSON = 114
 const OID_JSONB = 3802
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 /** Values as the other engines give them: dates as ISO strings, binary as a placeholder, JSON as text. */
 function parseValue(oid: number, text: string): unknown {

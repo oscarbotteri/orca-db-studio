@@ -102,9 +102,19 @@ function query(sql: string): ThreadOps['query']['output'] {
     return { cursorId: undefined, columns, affectedRows: Number(changes) }
   }
   statement.setReturnArrays(true)
+  // Integers beyond 2^53 would lose digits as numbers: they stay bigint, the rest narrow in fetch.
+  statement.setReadBigInts(true)
   const cursorId = nextCursorId++
   cursors.set(cursorId, statement.iterate())
   return { cursorId, columns, affectedRows: undefined }
+}
+
+function narrow(value: unknown): unknown {
+  const safe =
+    typeof value === 'bigint' &&
+    value >= BigInt(Number.MIN_SAFE_INTEGER) &&
+    value <= BigInt(Number.MAX_SAFE_INTEGER)
+  return safe ? Number(value) : value
 }
 
 function fetch(cursorId: number, count: number): Row[] {
@@ -117,7 +127,7 @@ function fetch(cursorId: number, count: number): Row[] {
       cursors.delete(cursorId)
       break
     }
-    rows.push(next.value as Row)
+    rows.push((next.value as Row).map(narrow))
   }
   return rows
 }

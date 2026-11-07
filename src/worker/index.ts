@@ -2,11 +2,10 @@ import type { OrcaWorkerApi } from 'orca/worker'
 import { CHOOSER_REQUEST_KEY } from '../protocol'
 import { type Connections, createConnections } from './connections'
 import { openTable } from './documents'
+import { RESULT_CEILING_ROWS } from './query-engine'
 import { findSqliteFiles } from './sqlite-discovery'
 
 const DEFAULT_ROW_LIMIT = 100
-/** A worker answer is at most 1 MiB, so no setting can ask for more rows than this. */
-const RESULT_CEILING_ROWS = 5000
 
 let connections: Connections | undefined
 

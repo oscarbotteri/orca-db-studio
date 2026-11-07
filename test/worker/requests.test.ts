@@ -535,3 +535,88 @@ describe('saved connection details', () => {
     expect(w.posts.filter((p) => p.event === 'connections.changed')).toHaveLength(2)
   })
 })
+
+describe('query.run own LIMIT', () => {
+  const COUNTER =
+    'WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 6000) SELECT i FROM n'
+
+  test('a statement with its own LIMIT skips the row limit', async () => {
+    const { worker: w } = await startWithFocus([], null, { rowLimit: 3 })
+    const ref = await shopRef(w)
+
+    const result = await w.request('query.run', { ref, sql: 'SELECT id FROM orders LIMIT 5' })
+
+    expect(result.rows).toHaveLength(5)
+    expect(result.truncated).toBe(false)
+  })
+
+  test('still stops at the result ceiling and says so', async () => {
+    const { worker: w } = await startWithFocus([], null, { rowLimit: 3 })
+    const ref = await shopRef(w)
+
+    const result = await w.request('query.run', { ref, sql: `${COUNTER} LIMIT 6000` })
+
+    expect(result.rows).toHaveLength(5000)
+    expect(result.truncated).toBe(true)
+  })
+
+  test('a LIMIT inside a subquery or a string is not the statement’s own', async () => {
+    const { worker: w } = await startWithFocus([], null, { rowLimit: 3 })
+    const ref = await shopRef(w)
+
+    const subquery = await w.request('query.run', {
+      ref,
+      sql: 'SELECT id FROM (SELECT id FROM orders LIMIT 4)',
+    })
+    const text = await w.request('query.run', {
+      ref,
+      sql: "SELECT id, 'x LIMIT 9' AS s FROM orders",
+    })
+
+    expect(subquery.rows).toHaveLength(3)
+    expect(text.rows).toHaveLength(3)
+  })
+})
+
+describe('query.run values', () => {
+  async function run(sql: string, setup?: string) {
+    const { worker: w } = await startWithFocus([], null)
+    const path = await createDatabase(join(root, 'values.db'), setup ?? 'CREATE TABLE t (id)')
+    const { ref } = await w.request('sqlite.add', { path })
+    return w.request('query.run', { ref, sql })
+  }
+
+  test('shortens long text to 300 characters', async () => {
+    const result = await run("SELECT printf('%.1000c', 'x') AS body, 'short' AS s")
+
+    expect(result.rows).toEqual([['x'.repeat(300), 'short']])
+  })
+
+  test('shows binary values as a size placeholder', async () => {
+    const result = await run("SELECT zeroblob(1229) AS big, x'0102' AS small")
+
+    expect(result.rows).toEqual([['<blob 1.2 KB>', '<blob 2 B>']])
+  })
+
+  test('keeps integers beyond 2^53 exact as strings and small ones as numbers', async () => {
+    const result = await run('SELECT 9007199254740993 AS big, 42 AS small, 1.5 AS real')
+
+    expect(result.rows).toEqual([['9007199254740993', 42, 1.5]])
+  })
+
+  test('keeps every column when names repeat', async () => {
+    const result = await run('SELECT 1 AS id, 2 AS id')
+
+    expect(result.columns).toEqual(['id', 'id'])
+    expect(result.rows).toEqual([[1, 2]])
+  })
+
+  test('shows the affected row count of a statement without rows', async () => {
+    const result = await run(
+      'UPDATE t SET id = 9',
+      'CREATE TABLE t (id); INSERT INTO t VALUES (1),(2)',
+    )
+
+    expect(result).toEqual({ columns: [], rows: [], truncated: false, affectedRows: 2 })
+  })
+})
