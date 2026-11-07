@@ -70,6 +70,10 @@ for (const image of VERSIONS) {
         await session.close()
       })
 
+      test('names its SQL dialect for the editor', () => {
+        expect(session.dialect).toBe('postgres')
+      })
+
       test('returns values the way the other engines do', async () => {
         const { columns, rows } = await fetchAll(
           session,

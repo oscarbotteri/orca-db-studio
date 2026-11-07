@@ -104,6 +104,8 @@ function describedCursor(
 }
 
 class PostgresSession implements Session {
+  readonly dialect = 'postgres'
+
   #client: PgClient
   #pid: number | undefined
   #timeoutMs = 0
