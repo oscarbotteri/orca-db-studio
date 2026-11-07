@@ -15,6 +15,10 @@ export default function activate(orca: OrcaWorkerApi): void {
   orca.panels.handle('connections.list', () => registry.list())
   orca.panels.handle('sqlite.findFiles', async () => ({ files: await findSqliteFiles(orca) }))
   orca.panels.handle('sqlite.add', ({ path }) => registry.addSqliteFile(path.trim()))
+  orca.panels.handle('sqlite.remove', async ({ path }) => {
+    await registry.removeSqliteFile(path)
+    return {}
+  })
   orca.panels.handle('connection.save', (input) => registry.saveServer(input))
   orca.panels.handle('connection.test', async (input) => {
     await registry.testServer(input)

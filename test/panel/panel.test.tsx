@@ -55,6 +55,67 @@ describe('SQLite files group', () => {
   })
 })
 
+describe('removing a SQLite file', () => {
+  test('Remove on a file row forgets it, collapses its tree and drops it from the list', async () => {
+    let files = [SHOP]
+    const host = mockHost({
+      requests: {
+        'connections.list': () => ({ sqliteFiles: files, servers: [] }),
+        'explorer.listObjects': SHOP_TREE,
+        'sqlite.remove': (input: { path: string }) => {
+          files = files.filter((f) => f.ref !== input.path)
+          return {}
+        },
+      },
+    })
+    const p = await mount(panel, { host })
+    const key = JSON.stringify(['connection', SHOP.ref])
+    await p.expand({ role: 'tree' }, key)
+
+    await p.activateItem({ role: 'tree' }, key)
+    await p.press({ text: 'Remove' })
+
+    expect(host.callsOf('plugin.request')).toContainEqual({
+      name: 'sqlite.remove',
+      input: { path: SHOP.ref },
+    })
+    expect(p.find({ label: 'No SQLite files' })).not.toBeNull()
+    expect(p.find({ text: 'Remove' })).toBeNull()
+  })
+
+  test('Cancel leaves the file in the list', async () => {
+    const host = mockHost({
+      requests: { 'connections.list': { sqliteFiles: [SHOP], servers: [] } },
+    })
+    const p = await mount(panel, { host })
+
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', SHOP.ref]))
+    await p.press({ text: 'Cancel' })
+
+    expect(host.callsOf('plugin.request')).not.toContainEqual(
+      expect.objectContaining({ name: 'sqlite.remove' }),
+    )
+    expect(p.find({ text: 'Remove' })).toBeNull()
+  })
+
+  test('shows why a removal failed', async () => {
+    const host = mockHost({
+      requests: {
+        'connections.list': { sqliteFiles: [SHOP], servers: [] },
+        'sqlite.remove': () => {
+          throw hostError('action_failed', 'No connection /data/shop.db')
+        },
+      },
+    })
+    const p = await mount(panel, { host })
+
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', SHOP.ref]))
+    await p.press({ text: 'Remove' })
+
+    expect(p.find({ text: /No connection \/data\/shop.db/ })).not.toBeNull()
+  })
+})
+
 describe('SQLite file chooser', () => {
   test('adds a file found in the workspaces and closes', async () => {
     let added: string | undefined

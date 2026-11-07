@@ -27,6 +27,7 @@ const SQLITE_FILES_KEY = 'sqlite-files'
 export interface Connections {
   list(): Promise<ConnectionList>
   addSqliteFile(path: string): Promise<ConnectionEntry>
+  removeSqliteFile(path: string): Promise<void>
   saveServer(input: ServerInput): Promise<ConnectionEntry>
   testServer(input: ServerInput): Promise<void>
   getServer(ref: string): Promise<SavedConnection>
@@ -70,6 +71,16 @@ async function addSqliteFile(orca: OrcaWorkerApi, input: string): Promise<Connec
     orca.panels.post('connections.changed', {})
   }
   return sqliteEntry(path)
+}
+
+async function removeSqliteFile(orca: OrcaWorkerApi, path: string): Promise<void> {
+  const files = await storedSqliteFiles(orca)
+  if (!files.includes(path)) throw new Error(`No connection ${path}`)
+  await orca.storage.set(
+    SQLITE_FILES_KEY,
+    files.filter((p) => p !== path),
+  )
+  orca.panels.post('connections.changed', {})
 }
 
 async function configFor(orca: OrcaWorkerApi, ref: string): Promise<ConnectionConfig> {
@@ -131,6 +142,10 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
     },
     addSqliteFile(path) {
       return addSqliteFile(orca, path)
+    },
+    async removeSqliteFile(path) {
+      await removeSqliteFile(orca, path)
+      forget(path)
     },
     async listObjects(ref) {
       return (await session(ref, await configFor(orca, ref))).listObjects()

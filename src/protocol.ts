@@ -71,6 +71,8 @@ declare module 'orca' {
     'connections.list': { output: ConnectionList }
     'sqlite.findFiles': { output: { files: FoundSqliteFile[] } }
     'sqlite.add': { input: { path: string }; output: ConnectionEntry }
+    /** Forgets the file; it is never touched on disk. Rejects when the path is not stored. */
+    'sqlite.remove': { input: { path: string }; output: Record<string, never> }
     /** `password` unset keeps the stored one when editing; without `ref` a new connection is made. */
     'connection.save': {
       input: { ref?: string; form: ConnectionForm; password?: string }

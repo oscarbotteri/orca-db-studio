@@ -16,6 +16,7 @@ import {
 import type { ConnectionEntry, SchemaNode } from '../protocol'
 import { editError, openEditForm, openNewForm } from './connection-form-state'
 import {
+  askToRemove,
   connectionKey,
   connections,
   expanded,
@@ -29,6 +30,7 @@ import {
   toggle,
   treeKey,
 } from './state'
+import { RemoveSqliteFile } from './remove-sqlite-file'
 import { WorkspacePicker } from './workspace-picker'
 
 /** Tree key of a table, which carries what opening it needs. */
@@ -127,7 +129,12 @@ function SqliteTree({ entries }: SqliteTreeProps) {
       </EmptyState>
     )
   }
-  return <ConnectionTree label="SQLite files" entries={entries} />
+  return (
+    <>
+      <ConnectionTree label="SQLite files" entries={entries} onActionConnection={askToRemove} />
+      <Text muted>Press Enter on a file to remove it from the list.</Text>
+    </>
+  )
 }
 
 export function ServerConnections() {
@@ -165,6 +172,7 @@ export function SqliteFiles() {
         <IconButton icon="add" label="Open SQLite file" variant="ghost" onPress={openChooser} />
       </Row>
       <WorkspacePicker />
+      <RemoveSqliteFile />
       {read(openError) ? (
         <Callout tone="danger" title="Could not open the table">
           {read(openError)}

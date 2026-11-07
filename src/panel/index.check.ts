@@ -74,6 +74,15 @@ export default defineCheck({
       'explorer.listObjects': SHOP_TREE,
     },
   },
+  'remove-file': {
+    persisted: { plugin: { 'sqlite-removal': SHOP } },
+    requests: { 'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [] } },
+  },
+  'remove-file-dark': {
+    theme: 'dark',
+    persisted: { plugin: { 'sqlite-removal': SHOP } },
+    requests: { 'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [] } },
+  },
   chooser: {
     storage: { [CHOOSER_REQUEST_KEY]: true },
     requests: {

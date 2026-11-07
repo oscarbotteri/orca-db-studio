@@ -133,6 +133,67 @@ describe('sqlite.add', () => {
   })
 })
 
+describe('sqlite.remove', () => {
+  test('forgets a stored file, leaves it on disk and notifies the panel', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const keep = await createDatabase(join(root, 'keep.db'))
+    const host = mockHost()
+    const w = await mountWorker(worker, { host })
+    await w.request('sqlite.add', { path })
+    await w.request('sqlite.add', { path: keep })
+    const before = w.posts.length
+
+    await w.request('sqlite.remove', { path })
+
+    expect((await w.request('connections.list')).sqliteFiles.map((c) => c.ref)).toEqual([keep])
+    expect(await readFile(path)).toBeInstanceOf(Buffer)
+    expect(w.posts.slice(before)).toContainEqual({ event: 'connections.changed', payload: {} })
+    await w.deactivate()
+  })
+
+  test('refuses a file that is not stored and changes nothing', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await mountWorker(worker, { host: mockHost() })
+    await w.request('sqlite.add', { path })
+
+    await expect(w.request('sqlite.remove', { path: join(root, 'other.db') })).rejects.toThrow(
+      `No connection ${join(root, 'other.db')}`,
+    )
+    expect((await w.request('connections.list')).sqliteFiles).toHaveLength(1)
+    await w.deactivate()
+  })
+
+  test('the removal survives a worker restart and closes the open session', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const host = mockHost()
+    const first = await mountWorker(worker, { host })
+    await first.request('sqlite.add', { path })
+    await first.request('explorer.listObjects', { ref: path })
+
+    await first.request('sqlite.remove', { path })
+    await expect(first.request('explorer.listObjects', { ref: path })).rejects.toThrow(
+      `No connection ${path}`,
+    )
+    await first.deactivate()
+
+    const second = await mountWorker(worker, { host })
+    expect((await second.request('connections.list')).sqliteFiles).toEqual([])
+    await second.deactivate()
+  })
+
+  test('a removed file can be added again', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await mountWorker(worker, { host: mockHost() })
+    await w.request('sqlite.add', { path })
+    await w.request('sqlite.remove', { path })
+
+    await w.request('sqlite.add', { path })
+
+    expect((await w.request('connections.list')).sqliteFiles.map((c) => c.ref)).toEqual([path])
+    await w.deactivate()
+  })
+})
+
 describe('explorer.listObjects', () => {
   test("lists an added SQLite file's tables and views by schema", async () => {
     const path = await createDatabase(
