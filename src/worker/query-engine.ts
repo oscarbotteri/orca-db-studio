@@ -1,2 +1,2 @@
-// Runs queries through the driver interface: cursors, paging, cancel, timeouts. Q3, G1
+// Runs a statement through the driver interface: cursor up to the row limit, cancel, timeout. Q3, G1
 export {}

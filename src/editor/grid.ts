@@ -1,2 +1,2 @@
-// Virtualized grid paged against the server. G1-G4
+// Query result grid, cut off at the row limit, with the full-value panel. G1, G3
 export {}
