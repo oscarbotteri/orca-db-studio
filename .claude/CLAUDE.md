@@ -53,7 +53,7 @@ DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB 
 ## Dev loop
 
 ```
-npm ci && npm run types    # a fresh worktree needs both before tsc or tests work
+npm ci && npm run types     # a fresh worktree needs both before tsc or tests work
 orca plugin dev watch .     # load as dev plugin, reload on save
 orca plugin types .         # regenerate .orca/types
 orca plugin test .          # *.test.ts(x) with orca/testing
