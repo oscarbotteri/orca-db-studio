@@ -36,7 +36,7 @@ It works the same on **PostgreSQL**, **MySQL/MariaDB** and **SQLite**.
 - **It lives in Orca.** No second window, and no copying connection strings around.
 - **It understands worktrees.** Each Orca workspace can point at its own database. If a workspace's `.env` (or `.env.local`) defines `DATABASE_URL`, DB Studio offers that database, grouped by workspace. Nothing to configure, and the URL is never copied: it is read from the `.env` every time you use it.
 - **One model for three engines.** Same panel, same editor, same grid. Engine differences stay inside the drivers.
-- **Safe by default.** Passwords live only in Orca's secrets store, never in logs or plain storage. Results are always cut off at a ceiling, so a careless query cannot flood the tab.
+- **Safe by default.** Passwords live only in Orca's secrets store, never in logs or plain storage. Results are always cut off at a ceiling, so a careless query cannot flood the tab or Orca's memory.
 
 ## How it works
 
@@ -55,7 +55,7 @@ SELECT * FROM orders WHERE status = 'pending' LIMIT 100;
 
 Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on its own). Any `.sql` file in your repo opens in the same editor, with a "Choose connection" control when it has no connection line.
 
-## Features (MVP)
+## Features
 
 **Connections**
 
@@ -82,6 +82,17 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 - Long text shortened, binary shown as `<blob 1.2 KB>`, large integers and decimals kept exact.
 - Open any cell's full value (up to 1 MiB) in a side panel, with JSON formatted.
 - Affected row count for statements without rows.
+
+## Under the hood
+
+A database client is only useful if you can trust it with a large table or a slow query. These are the guarantees DB Studio is built around, and where each one is checked.
+
+- **Rows are streamed, never loaded whole.** Every driver reads through a cursor and stops at the row limit or the result ceiling. `SELECT * FROM events` on a table with millions of rows reads 101 rows, not millions. ([Query results](docs/system-architecture.md#query-results))
+- **Cancel reaches the database.** PostgreSQL gets `pg_cancel_backend`, MySQL/MariaDB get `KILL QUERY`, and a SQLite query's thread is stopped. The connection keeps working afterwards. ([Driver interface](docs/system-architecture.md#driver-interface))
+- **A slow SQLite query never freezes Orca.** `node:sqlite` is synchronous, so each SQLite session runs in its own thread. ([ADR 0004](docs/adr/0004-sqlite-thread-loaded-by-node.md))
+- **Values arrive exactly as stored.** Large integers and decimals travel as strings, so `9007199254740993` does not become `9007199254740992`.
+- **Tested against real engines.** The same driver contract runs in CI against PostgreSQL, MySQL and MariaDB containers and SQLite files. ([`test/drivers/`](test/drivers/))
+- **Ready for Orca's plugin directory.** The drivers are pure JavaScript with no native modules, every file stays under 1 MiB, and CI fails if `vendor/` differs from a fresh build of the committed source in `build/`.
 
 ## Roadmap
 
