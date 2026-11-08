@@ -4,6 +4,7 @@ import { createConnectionChooser } from './connection-chooser'
 import { chooserState, connectionEntries } from './connection-state'
 import { renderError, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
+import { PALETTE_STYLE } from './sql-theme'
 import {
   connectionLineChange,
   connectionRef,
@@ -28,7 +29,7 @@ const STYLE = `
     border: 1px solid var(--orca-border); border-radius: 4px; padding: 2px 6px; }
   .chooser .notice { padding: 0; border: 0; }
   .editor { flex: 0 0 40%; overflow: auto; border-bottom: 1px solid var(--orca-border); }
-  .editor .cm-editor { height: 100%; background: var(--orca-background); color: var(--orca-foreground); }
+  .editor .cm-editor { height: 100%; }
   .result { flex: 1; overflow: auto; }
   .notice { padding: 6px 10px; border-bottom: 1px solid var(--orca-border); opacity: .8; }
   .error { padding: 10px; color: var(--orca-danger, #d33); white-space: pre-wrap;
@@ -58,7 +59,7 @@ if (!orca.document) throw new Error('This file runs as a custom editor')
 const doc = await orca.document.session()
 
 const style = document.createElement('style')
-style.textContent = STYLE
+style.textContent = STYLE + PALETTE_STYLE
 document.head.append(style)
 
 const toolbar = div('toolbar')

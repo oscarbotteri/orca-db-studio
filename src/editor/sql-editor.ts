@@ -2,10 +2,13 @@
 import {
   autocompletion,
   completionKeymap,
-  defaultHighlightStyle,
+  bracketMatching,
   defaultKeymap,
   EditorState,
+  drawSelection,
   EditorView,
+  highlightActiveLine,
+  highlightActiveLineGutter,
   history,
   historyKeymap,
   keymap,
@@ -15,9 +18,9 @@ import {
   PostgreSQL,
   SQLite,
   sql,
-  syntaxHighlighting,
 } from '../../vendor/codemirror.js'
 import type { SqlDialect } from '../protocol'
+import { sqlTheme } from './sql-theme'
 import type { TextChange } from './statements'
 
 const DIALECTS = { sqlite: SQLite, postgres: PostgreSQL, mysql: MySQL, mariadb: MariaSQL }
@@ -49,10 +52,14 @@ export function createSqlEditor(options: SqlEditorOptions): SqlEditor {
       doc: options.text,
       extensions: [
         lineNumbers(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
+        drawSelection(),
+        bracketMatching(),
         history(),
         autocompletion(),
         sql({ dialect: DIALECTS[options.dialect] }),
-        syntaxHighlighting(defaultHighlightStyle),
+        sqlTheme,
         EditorState.readOnly.of(options.readOnly),
         keymap.of([
           {
