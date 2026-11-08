@@ -1,7 +1,7 @@
 import type { OrcaWorkerApi } from 'orca/worker'
 import { SQLITE_FORM_REQUEST_KEY } from '../protocol'
 import { type Connections, createConnections } from './connections'
-import { openTable } from './documents'
+import { newQuery, openTable } from './documents'
 import { RESULT_CEILING_ROWS } from './query-engine'
 import { findSqliteFiles } from './sqlite-discovery'
 
@@ -70,6 +70,10 @@ export default function activate(orca: OrcaWorkerApi): void {
     await orca.storage.set(SQLITE_FORM_REQUEST_KEY, true)
     orca.panels.post('sqlite.formRequested', {})
     return 'Add the SQLite file in the DB Studio panel.'
+  })
+  orca.commands.register('db-studio.newQuery', async () => {
+    const path = await newQuery(orca)
+    return `Opened ${path}. Choose its connection in the editor.`
   })
 }
 

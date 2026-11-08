@@ -1,4 +1,4 @@
-// Creates query documents in .db-studio/ and opens them with editor.open. E1, ADR 0003
+// Creates query documents in .db-studio/ and opens them with editor.open. E1, X1, ADR 0003
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
@@ -97,4 +97,14 @@ export async function openTable(
   const path = `${FOLDER}/${name}`
   await orca.host.call('editor.open', { workspaceId: target.id, path })
   return { status: 'opened', path }
+}
+
+/** An empty query document in the focused workspace; the editor then asks for its connection. X1 */
+export async function newQuery(orca: OrcaWorkerApi): Promise<string> {
+  const workspace = await focusedWorkspace(orca, await listLocalWorkspaces(orca))
+  if (!workspace) throw new Error('Focus a workspace to create a query')
+  const name = await writeDocument(await queryFolder(workspace), 'query', '')
+  const path = `${FOLDER}/${name}`
+  await orca.host.call('editor.open', { workspaceId: workspace.id, path })
+  return path
 }
