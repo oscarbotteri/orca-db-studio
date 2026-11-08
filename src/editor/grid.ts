@@ -33,7 +33,7 @@ export interface FullValueModel {
   /** Pretty-printed when the value is a JSON object or array. */
   text: string
   isNull: boolean
-  /** Set when the value was cut at 1 MiB. */
+  /** Set when the value was too large to show in full and was cut. */
   notice: string | undefined
 }
 
@@ -52,7 +52,7 @@ export function fullValueModel(value: CellValue): FullValueModel {
     return {
       text: value.text,
       isNull: false,
-      notice: 'Showing the first part of the value: it is over 1 MiB and was cut.',
+      notice: 'Showing the first part of the value: it is too large to show in full and was cut.',
     }
   }
   return { text: prettyJson(value.text), isNull: false, notice: undefined }

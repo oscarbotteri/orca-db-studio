@@ -966,6 +966,23 @@ describe('query.cancel and the query timeout', () => {
     expect(next.rows).toEqual([[2]])
   })
 
+  test("cancelling one document also ends another document's query on the same SQLite connection", async () => {
+    const { w, ref } = await slowRunner({ queryTimeoutSeconds: 5 })
+    const outcome = (documentId: string) =>
+      w.request('query.run', { ref, sql: SLOW, documentId }).then(
+        () => 'finished',
+        (error: Error) => error.message,
+      )
+    const first = outcome('d1')
+    const second = outcome('d2')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    await w.request('query.cancel', { documentId: 'd1' })
+
+    expect(await first).toBe('Query cancelled')
+    expect(await second).toBe('Query cancelled')
+  })
+
   test('a query over queryTimeoutSeconds ends with a timeout error, and the next one works', async () => {
     const { w, ref } = await slowRunner({ queryTimeoutSeconds: 1 })
 

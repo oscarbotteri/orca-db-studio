@@ -2,7 +2,8 @@
 import type { ConnectionEntry, SqlDialect } from '../protocol'
 import { createConnectionChooser } from './connection-chooser'
 import { chooserState } from './connection-state'
-import { fullValueModel, renderError, renderFullValue, renderGrid } from './grid'
+import { createFullValuePanel, errorMessage } from './full-value-panel'
+import { renderError, renderFullValue, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
 import {
   connectionLineChange,
@@ -50,10 +51,6 @@ const STYLE = `
 
 const NO_CONNECTION = 'Choose a connection to run this file.'
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function div(className: string): HTMLDivElement {
   const node = document.createElement('div')
   node.className = className
@@ -79,15 +76,20 @@ cancel.hidden = true
 toolbar.append(run, cancel, hint)
 const editorHost = div('editor')
 const result = div('result')
-const fullValue = div('fullvalue')
-fullValue.hidden = true
-document.body.append(toolbar, editorHost, result, fullValue)
+const fullValueHost = div('fullvalue')
+document.body.append(toolbar, editorHost, result, fullValueHost)
 
 /** Names this document to the worker, which keeps its rows' full values under it (G3). */
 const documentId = crypto.randomUUID()
 // Best effort: a closing frame may not get the request out, so the worker also keeps few documents.
 addEventListener('pagehide', () => {
   orca.plugin.request('query.release', { documentId }).catch(() => undefined)
+})
+
+const fullValuePanel = createFullValuePanel({
+  element: fullValueHost,
+  readCell: (row, column) => orca.plugin.request('query.cell', { documentId, row, column }),
+  render: renderFullValue,
 })
 
 const ref = connectionRef(doc.value)
@@ -178,7 +180,7 @@ async function execute(): Promise<void> {
   running = true
   run.disabled = true
   cancel.hidden = false
-  closeFullValue()
+  fullValuePanel.close()
   // The old grid would still answer clicks, for rows the worker has already dropped.
   const message = div('message')
   message.textContent = 'Running…'
@@ -187,7 +189,7 @@ async function execute(): Promise<void> {
     renderGrid(
       result,
       await orca.plugin.request('query.run', { ref, sql, documentId }),
-      (row, column) => void showFullValue(row, column),
+      (row, column) => void fullValuePanel.show(row, column),
     )
   } catch (error) {
     renderError(result, errorMessage(error))
@@ -196,28 +198,6 @@ async function execute(): Promise<void> {
     run.disabled = false
     cancel.hidden = true
   }
-}
-
-/** Only the latest selection may land: an earlier, slower one is stale by then. */
-let latestSelection = 0
-
-function closeFullValue(): void {
-  latestSelection++
-  fullValue.hidden = true
-  fullValue.replaceChildren()
-}
-
-async function showFullValue(row: number, column: number): Promise<void> {
-  const mine = ++latestSelection
-  let state: Parameters<typeof renderFullValue>[1]
-  try {
-    state = fullValueModel(await orca.plugin.request('query.cell', { documentId, row, column }))
-  } catch (error) {
-    state = { error: errorMessage(error) }
-  }
-  if (mine !== latestSelection) return
-  fullValue.hidden = false
-  renderFullValue(fullValue, state)
 }
 
 cancel.addEventListener('click', () => {

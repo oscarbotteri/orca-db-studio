@@ -27,3 +27,11 @@ _Avoid_: Query tab, scratch, console
 **Query result**:
 The rows a query document returns, cut off at the row limit unless the query sets its own, and never beyond the result ceiling.
 _Avoid_: Result set, output
+
+**Full value**:
+The complete content of one cell of a query result, read on demand when the person selects the cell; the grid itself shows only its first 300 characters. A value too large for one worker answer is cut, and says so.
+_Avoid_: Cell detail, expanded cell
+
+**Document id**:
+A random id a query document generates for itself so the worker can tie its running query and the full values of its last result to it.
+_Avoid_: Tab id, session id

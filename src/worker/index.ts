@@ -11,6 +11,11 @@ const DEFAULT_ROW_LIMIT = 100
 const MAX_TIMEOUT_SECONDS = 110
 const DEFAULT_TIMEOUT_SECONDS = 30
 
+/** A number setting of at least 1, capped at `max`; anything else is the default. */
+function clampSetting(value: unknown, max: number, fallback: number): number {
+  return typeof value === 'number' && value >= 1 ? Math.min(value, max) : fallback
+}
+
 let connections: Connections | undefined
 
 export default function activate(orca: OrcaWorkerApi): void {
@@ -39,16 +44,16 @@ export default function activate(orca: OrcaWorkerApi): void {
     dialect: await registry.dialect(ref),
   }))
   orca.panels.handle('query.run', async ({ ref, sql, documentId }) => {
-    const limit = await orca.settings.get('rowLimit')
-    const rowLimit =
-      typeof limit === 'number' && limit >= 1
-        ? Math.min(limit, RESULT_CEILING_ROWS)
-        : DEFAULT_ROW_LIMIT
-    const timeout = await orca.settings.get('queryTimeoutSeconds')
-    const seconds =
-      typeof timeout === 'number' && timeout >= 1
-        ? Math.min(timeout, MAX_TIMEOUT_SECONDS)
-        : DEFAULT_TIMEOUT_SECONDS
+    const rowLimit = clampSetting(
+      await orca.settings.get('rowLimit'),
+      RESULT_CEILING_ROWS,
+      DEFAULT_ROW_LIMIT,
+    )
+    const seconds = clampSetting(
+      await orca.settings.get('queryTimeoutSeconds'),
+      MAX_TIMEOUT_SECONDS,
+      DEFAULT_TIMEOUT_SECONDS,
+    )
     return registry.runQuery(ref, sql, { documentId, rowLimit, timeoutMs: seconds * 1000 })
   })
   orca.panels.handle('query.cancel', async ({ documentId }) => {

@@ -116,7 +116,7 @@ Engine notes:
   - `statement_timeout` is the server's own limit and restarts on every batch read (each is a separate Execute), so it bounds each batch, not the whole stream. The row limit and result ceiling bound the stream.
   - The cursor's describe step is reached through pg-cursor's internal hooks (`submit`, `handleRowDescription`, `handleError`), patched by name in `src/drivers/postgres.ts`. After a `pg` or `pg-cursor` bump, run `npm run test:drivers`.
 - **MySQL/MariaDB:** `mysql2` row streaming through its callback API (the promise API buffers), with `multipleStatements` off and `supportBigNumbers`/`bigNumberStrings` on; cancel via `KILL QUERY` from a second connection.
-- **SQLite:** `node:sqlite` in a `worker_threads` thread, iterating rows with `statement.iterate()`; cancel and timeout terminate the thread.
+- **SQLite:** `node:sqlite` in a `worker_threads` thread, iterating rows with `statement.iterate()`; cancel and timeout terminate the thread. A connection has one thread shared by every query document using it, so cancelling or timing out one query also ends the other documents' running queries on that connection (they fail with the same cancel or timeout error); the next query starts a fresh thread (ADR 0004).
 
 ## Orca platform limits
 

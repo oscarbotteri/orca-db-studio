@@ -65,7 +65,7 @@ function answerBytes(text: string): number {
 }
 
 /** The longest start of `text` whose JSON-quoted answer fits one worker answer. */
-function fitAnswer(text: string): CellValue {
+function cutToAnswer(text: string): CellValue {
   if (answerBytes(text) <= CELL_ANSWER_BYTES) return { text, cut: false }
   let cut = text.slice(0, CELL_ANSWER_BYTES)
   while (answerBytes(cut) > CELL_ANSWER_BYTES) {
@@ -76,31 +76,48 @@ function fitAnswer(text: string): CellValue {
   return { text: cut, cut: true }
 }
 
+/** Full values by document, least recently run first, for the documents run most recently. */
+function createKeptValues(): {
+  replace(documentId: string, rows: unknown[][]): void
+  get(documentId: string): unknown[][] | undefined
+  drop(documentId: string): void
+} {
+  const rowsByDocument = new Map<string, unknown[][]>()
+  return {
+    replace(documentId, rows) {
+      rowsByDocument.set(documentId, rows)
+      for (const oldest of rowsByDocument.keys()) {
+        if (rowsByDocument.size <= KEPT_DOCUMENTS) break
+        rowsByDocument.delete(oldest)
+      }
+    },
+    get: (documentId) => rowsByDocument.get(documentId),
+    drop: (documentId) => void rowsByDocument.delete(documentId),
+  }
+}
+
+function readCell(rows: unknown[][] | undefined, row: number, column: number): CellValue {
+  if (!rows) throw new Error('The result is no longer available: run the query again.')
+  const cells = rows[row]
+  if (!cells || column < 0 || column >= cells.length) {
+    throw new Error(`No such cell: row ${row}, column ${column}`)
+  }
+  const text = fullText(cells[column])
+  return text === null ? { text: null, cut: false } : cutToAnswer(text)
+}
+
 export function createQueryEngine(): QueryEngine {
-  /** Full values by document, least recently run first. */
-  const kept = new Map<string, unknown[][]>()
+  const values = createKeptValues()
   const running = new Map<string, { session: Session; queryId: string }>()
-
-  function release(documentId: string): void {
-    kept.delete(documentId)
-  }
-
-  function keep(documentId: string, rows: unknown[][]): void {
-    kept.set(documentId, rows)
-    for (const oldest of kept.keys()) {
-      if (kept.size <= KEPT_DOCUMENTS) break
-      kept.delete(oldest)
-    }
-  }
 
   return {
     async run(session, sql, { documentId, rowLimit, timeoutMs }) {
-      release(documentId)
+      values.drop(documentId)
       const queryId = randomUUID()
       running.set(documentId, { session, queryId })
       try {
         const { result, full } = await runStatement(session, sql, rowLimit, { queryId, timeoutMs })
-        keep(documentId, full)
+        values.replace(documentId, full)
         return result
       } finally {
         if (running.get(documentId)?.queryId === queryId) running.delete(documentId)
@@ -110,17 +127,8 @@ export function createQueryEngine(): QueryEngine {
       const query = running.get(documentId)
       if (query) await query.session.cancel(query.queryId)
     },
-    cell(documentId, row, column) {
-      const rows = kept.get(documentId)
-      if (!rows) throw new Error('The result is no longer available: run the query again.')
-      const cells = rows[row]
-      if (!cells || column < 0 || column >= cells.length) {
-        throw new Error(`No such cell: row ${row}, column ${column}`)
-      }
-      const text = fullText(cells[column])
-      return text === null ? { text: null, cut: false } : fitAnswer(text)
-    },
-    release,
+    cell: (documentId, row, column) => readCell(values.get(documentId), row, column),
+    release: values.drop,
   }
 }
 

@@ -86,8 +86,8 @@ class SqliteSession implements Session {
     return this.thread().call('listObjects', {})
   }
 
-  /** Ends the thread once `timeoutMs` has passed; the returned function disarms it. */
-  #armTimeout(thread: Thread, timeoutMs: number | undefined): () => void {
+  /** Ends the thread once `timeoutMs` has passed; the returned function clears that timer. */
+  #startTimeout(thread: Thread, timeoutMs: number | undefined): () => void {
     if (!timeoutMs || timeoutMs <= 0) return () => undefined
     const timer = setTimeout(() => {
       this.#stop(thread, new Error(`Query timed out after ${formatSeconds(timeoutMs)}`))
@@ -99,21 +99,22 @@ class SqliteSession implements Session {
   async query(sql: string, opts: QueryOptions): Promise<QueryCursor> {
     const thread = this.thread()
     // The statement's whole life counts: preparing, and every fetch until the cursor closes.
-    const disarm = this.#armTimeout(thread, opts.timeoutMs)
-    const finish = () => {
-      disarm()
-      this.#running.delete(opts.queryId)
+    const clearTimer = this.#startTimeout(thread, opts.timeoutMs)
+    const running = this.#running
+    function endQuery(): void {
+      clearTimer()
+      running.delete(opts.queryId)
     }
-    this.#running.add(opts.queryId)
+    running.add(opts.queryId)
     let result: ThreadOps['query']['output']
     try {
       result = await thread.call('query', { sql })
     } catch (error) {
-      finish()
+      endQuery()
       throw error
     }
     const { cursorId } = result
-    if (cursorId === undefined) finish()
+    if (cursorId === undefined) endQuery()
     return {
       columns: result.columns,
       affectedRows: result.affectedRows,
@@ -122,7 +123,7 @@ class SqliteSession implements Session {
         return thread.call('fetch', { cursorId, count })
       },
       async close() {
-        finish()
+        endQuery()
         if (cursorId === undefined) return
         await thread.call('closeCursor', { cursorId }).catch(() => undefined)
       },

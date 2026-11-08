@@ -64,10 +64,12 @@ describe('fullValueModel', () => {
     expect(fullValueModel({ text: 'NULL', cut: false }).isNull).toBe(false)
   })
 
-  test('says when the value was cut at 1 MiB, and does not format the cut JSON', () => {
+  test('says when the value was too large and was cut, and does not format the cut JSON', () => {
     const model = fullValueModel({ text: '{"a":"xxxx', cut: true })
 
-    expect(model.notice).toBe('Showing the first part of the value: it is over 1 MiB and was cut.')
+    expect(model.notice).toBe(
+      'Showing the first part of the value: it is too large to show in full and was cut.',
+    )
     expect(model.text).toBe('{"a":"xxxx')
   })
 })
