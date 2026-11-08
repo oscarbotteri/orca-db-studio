@@ -20,3 +20,6 @@ coverage/
 test/qa/data/
 test/qa/.env*
 !test/qa/.env.example
+
+# Temporary research notes
+docs/research/
