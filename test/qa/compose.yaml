@@ -20,3 +20,24 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  mariadb:
+    image: mariadb:${MARIADB_VERSION:?set MARIADB_VERSION in test/qa/.env}
+    ports:
+      - "127.0.0.1:${MARIADB_PORT:-33306}:3306"
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-shop}
+      MARIADB_USER: ${MARIADB_USER:-shop}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?set MARIADB_PASSWORD in test/qa/.env}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD in test/qa/.env}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - ./mariadb/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./data/mariadb-data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+    healthcheck:
+      # --connect uses TCP, which the init-time server does not open, so "healthy" means seeded.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s

@@ -24,6 +24,7 @@
     "qa:up": "node test/qa/qa.ts up",
     "qa:down": "node test/qa/qa.ts down",
     "qa:reset": "node test/qa/qa.ts reset",
+    "qa:seed:mariadb": "node test/qa/seed-mariadb.ts",
     "qa:seed:postgres": "node test/qa/seed-postgres.ts",
     "qa:seed:sqlite": "node test/qa/seed-sqlite.ts"
   },
