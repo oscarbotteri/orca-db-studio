@@ -185,12 +185,12 @@ describe('sqlite.remove', () => {
     const path = await createDatabase(join(root, 'shop.db'))
     const w = await mountWorker(worker, { host: mockHost() })
     await w.request('sqlite.add', { path })
-    await w.request('query.run', { ref: path, sql: 'SELECT 1' })
+    await w.request('query.run', { ref: path, sql: 'SELECT 1', documentId: 'd1' })
     await w.request('sqlite.remove', { path })
 
-    await expect(w.request('query.run', { ref: path, sql: 'SELECT 1' })).rejects.toThrow(
-      `No connection ${path}`,
-    )
+    await expect(
+      w.request('query.run', { ref: path, sql: 'SELECT 1', documentId: 'd1' }),
+    ).rejects.toThrow(`No connection ${path}`)
     await w.deactivate()
   })
 
@@ -454,6 +454,7 @@ describe('query.run', () => {
     const result = await w.request('query.run', {
       ref,
       sql: 'SELECT id FROM orders WHERE id < 3 ORDER BY id',
+      documentId: 'd1',
     })
 
     expect(result).toEqual({
@@ -466,7 +467,11 @@ describe('query.run', () => {
   test('cuts a statement at the row limit and says so', async () => {
     const { w, ref } = await runner({ rowLimit: 3 })
 
-    const result = await w.request('query.run', { ref, sql: 'SELECT id FROM orders' })
+    const result = await w.request('query.run', {
+      ref,
+      sql: 'SELECT id FROM orders',
+      documentId: 'd1',
+    })
 
     expect(result.rows).toEqual([[1], [2], [3]])
     expect(result.truncated).toBe(true)
@@ -475,7 +480,11 @@ describe('query.run', () => {
   test('does not report a cut-off when the rows fit exactly', async () => {
     const { w, ref } = await runner({ rowLimit: 5 })
 
-    const result = await w.request('query.run', { ref, sql: 'SELECT id FROM orders' })
+    const result = await w.request('query.run', {
+      ref,
+      sql: 'SELECT id FROM orders',
+      documentId: 'd1',
+    })
 
     expect(result.rows).toHaveLength(5)
     expect(result.truncated).toBe(false)
@@ -484,16 +493,18 @@ describe('query.run', () => {
   test('shows the database error for a failing statement', async () => {
     const { w, ref } = await runner()
 
-    await expect(w.request('query.run', { ref, sql: 'SELECT * FROM missing' })).rejects.toThrow(
-      /no such table: missing/,
-    )
+    await expect(
+      w.request('query.run', { ref, sql: 'SELECT * FROM missing', documentId: 'd1' }),
+    ).rejects.toThrow(/no such table: missing/)
   })
 
   test('runs the next statement after a failure on the same connection', async () => {
     const { w, ref } = await runner()
-    await expect(w.request('query.run', { ref, sql: 'SELEC 1' })).rejects.toThrow()
+    await expect(
+      w.request('query.run', { ref, sql: 'SELEC 1', documentId: 'd1' }),
+    ).rejects.toThrow()
 
-    const result = await w.request('query.run', { ref, sql: 'SELECT 1 AS one' })
+    const result = await w.request('query.run', { ref, sql: 'SELECT 1 AS one', documentId: 'd1' })
 
     expect(result.rows).toEqual([[1]])
   })
@@ -516,6 +527,7 @@ describe('query.run result ceiling', () => {
     const result = await w.request('query.run', {
       ref,
       sql: 'WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 6000) SELECT i FROM n',
+      documentId: 'd1',
     })
 
     expect(result.rows).toHaveLength(5000)
@@ -531,6 +543,7 @@ describe('query.run answer size', () => {
     const result = await w.request('query.run', {
       ref,
       sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000) SELECT i, printf('%.2000c', 'x') AS pad FROM n",
+      documentId: 'd1',
     })
 
     expect(result.truncated).toBe(true)
@@ -676,7 +689,11 @@ describe('query.run own LIMIT', () => {
     const { worker: w } = await startWithFocus([], null, { rowLimit: 3 })
     const ref = await shopRef(w)
 
-    const result = await w.request('query.run', { ref, sql: 'SELECT id FROM orders LIMIT 5' })
+    const result = await w.request('query.run', {
+      ref,
+      sql: 'SELECT id FROM orders LIMIT 5',
+      documentId: 'd1',
+    })
 
     expect(result.rows).toHaveLength(5)
     expect(result.truncated).toBe(false)
@@ -686,7 +703,11 @@ describe('query.run own LIMIT', () => {
     const { worker: w } = await startWithFocus([], null, { rowLimit: 3 })
     const ref = await shopRef(w)
 
-    const result = await w.request('query.run', { ref, sql: `${COUNTER} LIMIT 6000` })
+    const result = await w.request('query.run', {
+      ref,
+      sql: `${COUNTER} LIMIT 6000`,
+      documentId: 'd1',
+    })
 
     expect(result.rows).toHaveLength(5000)
     expect(result.truncated).toBe(true)
@@ -699,10 +720,12 @@ describe('query.run own LIMIT', () => {
     const subquery = await w.request('query.run', {
       ref,
       sql: 'SELECT id FROM (SELECT id FROM orders LIMIT 4)',
+      documentId: 'd1',
     })
     const text = await w.request('query.run', {
       ref,
       sql: "SELECT id, 'x LIMIT 9' AS s FROM orders",
+      documentId: 'd1',
     })
 
     expect(subquery.rows).toHaveLength(3)
@@ -715,7 +738,7 @@ describe('query.run values', () => {
     const { worker: w } = await startWithFocus([], null)
     const path = await createDatabase(join(root, 'values.db'), setup ?? 'CREATE TABLE t (id)')
     const { ref } = await w.request('sqlite.add', { path })
-    return w.request('query.run', { ref, sql })
+    return w.request('query.run', { ref, sql, documentId: 'd1' })
   }
 
   test('shortens long text to 300 characters', async () => {
@@ -761,6 +784,7 @@ describe('query.run wire size and cuts', () => {
     const result = await w.request('query.run', {
       ref,
       sql: "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000) SELECT replace(hex(zeroblob(150)), '00', '日本') AS t FROM n",
+      documentId: 'd1',
     })
 
     expect(result.truncated).toBe(true)
@@ -774,8 +798,215 @@ describe('query.run wire size and cuts', () => {
     const result = await w.request('query.run', {
       ref,
       sql: "SELECT printf('%.299c', 'x') || '😀😀' AS t",
+      documentId: 'd1',
     })
 
     expect(result.rows).toEqual([['x'.repeat(299)]])
+  })
+})
+
+describe('query.cell', () => {
+  async function ranOnce(sql: string, documentId = 'd1') {
+    const { worker: w } = await startWithFocus([], null)
+    const ref = await shopRef(w)
+    await w.request('query.run', { ref, sql, documentId })
+    return { w, ref }
+  }
+
+  test('serves the full value of a shortened cell by row and column', async () => {
+    const { w } = await ranOnce("SELECT 1 AS id, printf('%.1000c', 'x') AS body")
+
+    expect(await w.request('query.cell', { documentId: 'd1', row: 0, column: 1 })).toEqual({
+      text: 'x'.repeat(1000),
+      cut: false,
+    })
+  })
+
+  test('serves NULL as null and numbers as text', async () => {
+    const { w } = await ranOnce('SELECT 42 AS n, NULL AS missing')
+
+    expect(await w.request('query.cell', { documentId: 'd1', row: 0, column: 0 })).toEqual({
+      text: '42',
+      cut: false,
+    })
+    expect(await w.request('query.cell', { documentId: 'd1', row: 0, column: 1 })).toEqual({
+      text: null,
+      cut: false,
+    })
+  })
+
+  test('cuts a value over 1 MiB and says so, keeping the answer under the host limit', async () => {
+    const { w } = await ranOnce("SELECT replace(hex(zeroblob(1200000)), '00', 'é') AS big")
+
+    const cell = await w.request('query.cell', { documentId: 'd1', row: 0, column: 0 })
+
+    expect(cell.cut).toBe(true)
+    expect(Buffer.byteLength(JSON.stringify(cell))).toBeLessThanOrEqual(1024 * 1024)
+    expect(cell.text?.length).toBeGreaterThan(400000)
+  })
+
+  test('keeps each document’s rows apart', async () => {
+    const { w, ref } = await ranOnce("SELECT 'first' AS v", 'a')
+    await w.request('query.run', { ref, sql: "SELECT 'second' AS v", documentId: 'b' })
+
+    expect((await w.request('query.cell', { documentId: 'a', row: 0, column: 0 })).text).toBe(
+      'first',
+    )
+    expect((await w.request('query.cell', { documentId: 'b', row: 0, column: 0 })).text).toBe(
+      'second',
+    )
+  })
+
+  test('a re-run replaces the rows the last run kept', async () => {
+    const { w, ref } = await ranOnce('SELECT 1 AS a, 2 AS b')
+    await w.request('query.run', { ref, sql: 'SELECT 9 AS a', documentId: 'd1' })
+
+    await expect(w.request('query.cell', { documentId: 'd1', row: 0, column: 1 })).rejects.toThrow(
+      /no such cell/i,
+    )
+    expect((await w.request('query.cell', { documentId: 'd1', row: 0, column: 0 })).text).toBe('9')
+  })
+
+  test('a failing re-run releases the rows too', async () => {
+    const { w, ref } = await ranOnce('SELECT 1 AS a')
+    await expect(
+      w.request('query.run', { ref, sql: 'SELECT * FROM missing', documentId: 'd1' }),
+    ).rejects.toThrow()
+
+    await expect(w.request('query.cell', { documentId: 'd1', row: 0, column: 0 })).rejects.toThrow(
+      /run the query again/i,
+    )
+  })
+
+  test('query.release forgets the rows', async () => {
+    const { w } = await ranOnce('SELECT 1 AS a')
+
+    await w.request('query.release', { documentId: 'd1' })
+
+    await expect(w.request('query.cell', { documentId: 'd1', row: 0, column: 0 })).rejects.toThrow(
+      /run the query again/i,
+    )
+  })
+
+  test('keeps the rows of the most recent documents only', async () => {
+    const { w, ref } = await ranOnce('SELECT 1 AS a', 'doc-0')
+    for (let i = 1; i <= 16; i++) {
+      await w.request('query.run', { ref, sql: 'SELECT 1 AS a', documentId: `doc-${i}` })
+    }
+
+    await expect(
+      w.request('query.cell', { documentId: 'doc-0', row: 0, column: 0 }),
+    ).rejects.toThrow(/run the query again/i)
+    expect((await w.request('query.cell', { documentId: 'doc-16', row: 0, column: 0 })).text).toBe(
+      '1',
+    )
+  })
+
+  test('refuses a position outside the result', async () => {
+    const { w } = await ranOnce('SELECT 1 AS a')
+
+    await expect(w.request('query.cell', { documentId: 'd1', row: 3, column: 0 })).rejects.toThrow(
+      /no such cell/i,
+    )
+  })
+})
+
+describe('query.cancel and the query timeout', () => {
+  // Counts to 60 million: seconds of work in SQLite before its one row.
+  const SLOW =
+    'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 60000000) SELECT count(*) FROM n'
+
+  async function slowRunner(settings = {}) {
+    const { worker: w } = await startWithFocus([], null, settings)
+    return { w, ref: await shopRef(w) }
+  }
+
+  test('cancel stops a running query, and the next query on the same connection works', async () => {
+    const { w, ref } = await slowRunner()
+    const running = w.request('query.run', { ref, sql: SLOW, documentId: 'd1' })
+    const failure = running.then(
+      () => undefined,
+      (error: Error) => error,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    await w.request('query.cancel', { documentId: 'd1' })
+
+    expect((await failure)?.message).toMatch(/cancel/i)
+    const next = await w.request('query.run', { ref, sql: 'SELECT 1 AS one', documentId: 'd1' })
+    expect(next.rows).toEqual([[1]])
+  })
+
+  test('cancel stops a document’s query even when another document queued on the same connection', async () => {
+    const { w, ref } = await slowRunner()
+    const first = w.request('query.run', { ref, sql: SLOW, documentId: 'a' }).then(
+      () => undefined,
+      (error: Error) => error,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const second = w.request('query.run', { ref, sql: 'SELECT 1', documentId: 'b' }).then(
+      () => undefined,
+      () => undefined,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    await w.request('query.cancel', { documentId: 'a' })
+
+    expect((await first)?.message).toMatch(/cancel/i)
+    await second
+  })
+
+  test('cancel with nothing running does nothing', async () => {
+    const { w, ref } = await slowRunner()
+    await w.request('query.run', { ref, sql: 'SELECT 1', documentId: 'd1' })
+
+    await w.request('query.cancel', { documentId: 'd1' })
+
+    const next = await w.request('query.run', { ref, sql: 'SELECT 2 AS two', documentId: 'd1' })
+    expect(next.rows).toEqual([[2]])
+  })
+
+  test('a query over queryTimeoutSeconds ends with a timeout error, and the next one works', async () => {
+    const { w, ref } = await slowRunner({ queryTimeoutSeconds: 1 })
+
+    await expect(w.request('query.run', { ref, sql: SLOW, documentId: 'd1' })).rejects.toThrow(
+      'Query timed out after 1 second',
+    )
+
+    const next = await w.request('query.run', { ref, sql: 'SELECT 1 AS one', documentId: 'd1' })
+    expect(next.rows).toEqual([[1]])
+  })
+
+  test('a query within the timeout is left alone', async () => {
+    const { w, ref } = await slowRunner({ queryTimeoutSeconds: 1 })
+
+    const result = await w.request('query.run', { ref, sql: 'SELECT 1 AS one', documentId: 'd1' })
+
+    expect(result.rows).toEqual([[1]])
+  })
+
+  test('the panel and other connections are answered while a query runs', async () => {
+    const { w, ref } = await slowRunner({ queryTimeoutSeconds: 2 })
+    const otherPath = await createDatabase(join(root, 'other.db'), 'CREATE TABLE u (id INTEGER)')
+    const other = (await w.request('sqlite.add', { path: otherPath })).ref
+    const running = w.request('query.run', { ref, sql: SLOW, documentId: 'd1' })
+    const settled = running.then(
+      () => undefined,
+      () => undefined,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const list = await w.request('connections.list')
+    const tree = await w.request('explorer.listObjects', { ref: other })
+    const result = await w.request('query.run', {
+      ref: other,
+      sql: 'SELECT 7 AS n',
+      documentId: 'd2',
+    })
+
+    expect(list.sqliteFiles).toHaveLength(2)
+    expect(tree.schemas[0]?.objects.map((o) => o.name)).toEqual(['u'])
+    expect(result.rows).toEqual([[7]])
+    await settled
   })
 })

@@ -4,13 +4,14 @@ import type { OrcaWorkerApi } from 'orca/worker'
 import { loadDriver } from '../drivers/registry'
 import type { ConnectionConfig, SchemaTree, Session, SqlDialect } from '../drivers/types'
 import type {
+  CellValue,
   ConnectionEntry,
   ConnectionForm,
   ConnectionList,
   QueryResult,
   SavedConnection,
 } from '../protocol'
-import { runStatement } from './query-engine'
+import { createQueryEngine, type RunOptions } from './query-engine'
 import {
   configOf,
   deleteServer,
@@ -35,7 +36,10 @@ export interface Connections {
   listObjects(ref: string): Promise<SchemaTree>
   dialect(ref: string): Promise<SqlDialect>
   quoteIdent(ref: string, name: string): Promise<string>
-  runQuery(ref: string, sql: string, rowLimit: number): Promise<QueryResult>
+  runQuery(ref: string, sql: string, options: RunOptions): Promise<QueryResult>
+  cancelQuery(documentId: string): Promise<void>
+  queryCell(documentId: string, row: number, column: number): CellValue
+  releaseQuery(documentId: string): void
   closeAll(): Promise<void>
 }
 
@@ -92,6 +96,7 @@ async function configFor(orca: OrcaWorkerApi, ref: string): Promise<ConnectionCo
 
 export function createConnections(orca: OrcaWorkerApi): Connections {
   const sessions = new Map<string, Promise<Session>>()
+  const engine = createQueryEngine()
 
   async function openSession(ref: string, config: ConnectionConfig): Promise<Session> {
     return connect(config, config.engine === 'sqlite' ? undefined : await passwordOf(orca, ref))
@@ -156,8 +161,17 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
     async quoteIdent(ref, name) {
       return (await session(ref, await configFor(orca, ref))).quoteIdent(name)
     },
-    async runQuery(ref, sql, rowLimit) {
-      return runStatement(await session(ref, await configFor(orca, ref)), sql, rowLimit)
+    async runQuery(ref, sql, options) {
+      return engine.run(await session(ref, await configFor(orca, ref)), sql, options)
+    },
+    cancelQuery(documentId) {
+      return engine.cancel(documentId)
+    },
+    queryCell(documentId, row, column) {
+      return engine.cell(documentId, row, column)
+    },
+    releaseQuery(documentId) {
+      engine.release(documentId)
     },
     async closeAll() {
       const open = [...sessions.values()]

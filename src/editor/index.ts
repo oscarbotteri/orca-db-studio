@@ -2,7 +2,7 @@
 import type { ConnectionEntry, SqlDialect } from '../protocol'
 import { createConnectionChooser } from './connection-chooser'
 import { chooserState } from './connection-state'
-import { renderError, renderGrid } from './grid'
+import { fullValueModel, renderError, renderFullValue, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
 import {
   connectionLineChange,
@@ -30,6 +30,13 @@ const STYLE = `
   .editor { flex: 0 0 40%; overflow: auto; border-bottom: 1px solid var(--orca-border); }
   .editor .cm-editor { height: 100%; background: var(--orca-background); color: var(--orca-foreground); }
   .result { flex: 1; overflow: auto; }
+  .fullvalue { flex: 0 1 35%; overflow: auto; border-top: 1px solid var(--orca-border); }
+  .fullvalue[hidden] { display: none; }
+  .fullvalue .value { margin: 0; padding: 6px 10px; white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, monospace; }
+  .fullvalue .null { padding: 6px 10px; opacity: .5; font-style: italic; }
+  .grid td { cursor: default; }
+  .grid td.selected { outline: 2px solid var(--orca-accent, #38f); outline-offset: -2px; }
   .notice { padding: 6px 10px; border-bottom: 1px solid var(--orca-border); opacity: .8; }
   .error { padding: 10px; color: var(--orca-danger, #d33); white-space: pre-wrap;
     font-family: ui-monospace, monospace; }
@@ -66,10 +73,22 @@ const run = document.createElement('button')
 run.textContent = 'Run'
 const hint = div('hint')
 hint.textContent = 'Runs the selection, or the statement under the cursor (Cmd/Ctrl+Enter)'
-toolbar.append(run, hint)
+const cancel = document.createElement('button')
+cancel.textContent = 'Cancel'
+cancel.hidden = true
+toolbar.append(run, cancel, hint)
 const editorHost = div('editor')
 const result = div('result')
-document.body.append(toolbar, editorHost, result)
+const fullValue = div('fullvalue')
+fullValue.hidden = true
+document.body.append(toolbar, editorHost, result, fullValue)
+
+/** Names this document to the worker, which keeps its rows' full values under it (G3). */
+const documentId = crypto.randomUUID()
+// Best effort: a closing frame may not get the request out, so the worker also keeps few documents.
+addEventListener('pagehide', () => {
+  orca.plugin.request('query.release', { documentId }).catch(() => undefined)
+})
 
 const ref = connectionRef(doc.value)
 let entries: ConnectionEntry[] | undefined
@@ -158,15 +177,59 @@ async function execute(): Promise<void> {
   }
   running = true
   run.disabled = true
+  cancel.hidden = false
+  closeFullValue()
+  // The old grid would still answer clicks, for rows the worker has already dropped.
+  const message = div('message')
+  message.textContent = 'Running…'
+  result.replaceChildren(message)
   try {
-    renderGrid(result, await orca.plugin.request('query.run', { ref, sql }))
+    renderGrid(
+      result,
+      await orca.plugin.request('query.run', { ref, sql, documentId }),
+      (row, column) => void showFullValue(row, column),
+    )
   } catch (error) {
     renderError(result, errorMessage(error))
   } finally {
     running = false
     run.disabled = false
+    cancel.hidden = true
   }
 }
+
+/** Only the latest selection may land: an earlier, slower one is stale by then. */
+let latestSelection = 0
+
+function closeFullValue(): void {
+  latestSelection++
+  fullValue.hidden = true
+  fullValue.replaceChildren()
+}
+
+async function showFullValue(row: number, column: number): Promise<void> {
+  const mine = ++latestSelection
+  let state: Parameters<typeof renderFullValue>[1]
+  try {
+    state = fullValueModel(await orca.plugin.request('query.cell', { documentId, row, column }))
+  } catch (error) {
+    state = { error: errorMessage(error) }
+  }
+  if (mine !== latestSelection) return
+  fullValue.hidden = false
+  renderFullValue(fullValue, state)
+}
+
+cancel.addEventListener('click', () => {
+  cancel.disabled = true
+  // The running query.run rejects as cancelled; its handler above puts the message in the grid area.
+  orca.plugin
+    .request('query.cancel', { documentId })
+    .catch((error: unknown) => renderError(result, errorMessage(error)))
+    .finally(() => {
+      cancel.disabled = false
+    })
+})
 
 run.addEventListener('click', () => void execute())
 

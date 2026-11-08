@@ -74,6 +74,7 @@ A query result travels to the editor as the answer to one `plugin.request`, whic
 - **Result ceiling:** the query engine stops at 5000 rows or about 900 KB of serialized result, whichever comes first, even when the statement has its own `LIMIT`. The grid shows the same cut-off notice as for the row limit.
 - **Long cells:** text is cut to 300 characters and binary values travel as a placeholder with their size (`<blob 1.2 KB>`). The full value is fetched on demand by `(row, column)` from the worker for the full-value panel (G3), capped at 1 MiB.
 - **Values on the wire:** results are JSON. Integers beyond 2^53 and exact decimals travel as strings, dates as ISO strings, binary as a placeholder; duplicate column names are kept by position, not by name.
+- **Full values:** each query document names itself with a `documentId` it generates. The engine keeps the returned rows' full values per document, replaces them on a re-run, drops them on `query.release` (sent when the frame closes, best effort) and keeps the 16 most recently run documents.
 - **Timeout:** `queryTimeoutSeconds` (default 30) is capped at 110 so the worker answers before the request expires.
 
 ## Connections

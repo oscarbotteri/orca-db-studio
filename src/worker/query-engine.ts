@@ -1,8 +1,9 @@
-// Runs a statement through the driver interface: cursor up to the row limit, cancel, timeout. Q3, G1
+// Runs a statement through the driver interface: cursor up to the row limit, cancel, timeout, and
+// the full values of the rows it returned. Q3, G1, G3
 import { randomUUID } from 'node:crypto'
 import { formatSize } from '../drivers/format-size'
-import type { Session } from '../drivers/types'
-import type { QueryResult } from '../protocol'
+import type { QueryOptions, Session } from '../drivers/types'
+import type { CellValue, QueryResult } from '../protocol'
 import { hasOwnLimit } from './own-limit'
 
 /** A worker answer is at most 1 MiB, so no setting can ask for more rows than this. */
@@ -29,13 +30,108 @@ function wireValue(value: unknown): unknown {
   return value
 }
 
+/** A worker answer is at most 1 MiB, JSON quoting included, so a full value is cut to fit it. */
+const CELL_ANSWER_BYTES = 1024 * 1024
+
+/** Documents whose rows are kept at once; the frame cannot tell the worker reliably when it closes. */
+const KEPT_DOCUMENTS = 16
+
+export interface RunOptions {
+  documentId: string
+  rowLimit: number
+  /** Ends the statement after this long; unset means no limit. */
+  timeoutMs?: number
+}
+
+export interface QueryEngine {
+  run(session: Session, sql: string, options: RunOptions): Promise<QueryResult>
+  /** Stops the document's running query; does nothing when none runs. */
+  cancel(documentId: string): Promise<void>
+  cell(documentId: string, row: number, column: number): CellValue
+  release(documentId: string): void
+}
+
+/** Text of a value as the full-value panel shows it. */
+function fullText(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') return value
+  if (value instanceof Uint8Array) return `<blob ${formatSize(value.byteLength)}>`
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+function answerBytes(text: string): number {
+  return Buffer.byteLength(JSON.stringify({ text, cut: false }))
+}
+
+/** The longest start of `text` whose JSON-quoted answer fits one worker answer. */
+function fitAnswer(text: string): CellValue {
+  if (answerBytes(text) <= CELL_ANSWER_BYTES) return { text, cut: false }
+  let cut = text.slice(0, CELL_ANSWER_BYTES)
+  while (answerBytes(cut) > CELL_ANSWER_BYTES) {
+    cut = cut.slice(0, Math.floor((cut.length * CELL_ANSWER_BYTES) / answerBytes(cut)) - 1)
+  }
+  // Do not leave half of a surrogate pair at the end.
+  if (/[\ud800-\udbff]$/.test(cut)) cut = cut.slice(0, -1)
+  return { text: cut, cut: true }
+}
+
+export function createQueryEngine(): QueryEngine {
+  /** Full values by document, least recently run first. */
+  const kept = new Map<string, unknown[][]>()
+  const running = new Map<string, { session: Session; queryId: string }>()
+
+  function release(documentId: string): void {
+    kept.delete(documentId)
+  }
+
+  function keep(documentId: string, rows: unknown[][]): void {
+    kept.set(documentId, rows)
+    for (const oldest of kept.keys()) {
+      if (kept.size <= KEPT_DOCUMENTS) break
+      kept.delete(oldest)
+    }
+  }
+
+  return {
+    async run(session, sql, { documentId, rowLimit, timeoutMs }) {
+      release(documentId)
+      const queryId = randomUUID()
+      running.set(documentId, { session, queryId })
+      try {
+        const { result, full } = await runStatement(session, sql, rowLimit, { queryId, timeoutMs })
+        keep(documentId, full)
+        return result
+      } finally {
+        if (running.get(documentId)?.queryId === queryId) running.delete(documentId)
+      }
+    },
+    async cancel(documentId) {
+      const query = running.get(documentId)
+      if (query) await query.session.cancel(query.queryId)
+    },
+    cell(documentId, row, column) {
+      const rows = kept.get(documentId)
+      if (!rows) throw new Error('The result is no longer available: run the query again.')
+      const cells = rows[row]
+      if (!cells || column < 0 || column >= cells.length) {
+        throw new Error(`No such cell: row ${row}, column ${column}`)
+      }
+      const text = fullText(cells[column])
+      return text === null ? { text: null, cut: false } : fitAnswer(text)
+    },
+    release,
+  }
+}
+
 /** Reads one row past the limit, which is how a cut-off is known without counting the table. */
-export async function runStatement(
+async function runStatement(
   session: Session,
   sql: string,
   rowLimit: number,
-): Promise<QueryResult> {
-  const cursor = await session.query(sql, { queryId: randomUUID() })
+  opts: QueryOptions,
+): Promise<{ result: QueryResult; full: unknown[][] }> {
+  const cursor = await session.query(sql, opts)
   // A statement with its own LIMIT asks for exactly what it wants, up to the ceiling.
   const limit = hasOwnLimit(sql) ? RESULT_CEILING_ROWS : rowLimit
   try {
@@ -51,10 +147,13 @@ export async function runStatement(
     const truncated = rows.length < fetched.length
     const columns = cursor.columns.map((c) => c.name)
     return {
-      columns,
-      rows,
-      truncated,
-      ...(cursor.affectedRows === undefined ? {} : { affectedRows: cursor.affectedRows }),
+      result: {
+        columns,
+        rows,
+        truncated,
+        ...(cursor.affectedRows === undefined ? {} : { affectedRows: cursor.affectedRows }),
+      },
+      full: fetched.slice(0, rows.length),
     }
   } finally {
     await cursor.close()

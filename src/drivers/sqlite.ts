@@ -18,6 +18,11 @@ interface Pending {
   reject(error: Error): void
 }
 
+function formatSeconds(ms: number): string {
+  const seconds = Math.round(ms / 100) / 10
+  return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`
+}
+
 function startThread(path: string): Thread {
   const worker = new Worker(THREAD_URL, { workerData: { path } })
   const pending = new Map<number, Pending>()
@@ -59,8 +64,8 @@ class SqliteSession implements Session {
   readonly dialect = 'sqlite'
 
   #thread: Thread | undefined
-  /** The query whose call is running in the thread, which cancel may stop. */
-  #running: string | undefined
+  /** Queries between `query()` and their cursor's close; cancel may stop any of them. */
+  #running = new Set<string>()
 
   constructor(readonly path: string) {}
 
@@ -69,32 +74,55 @@ class SqliteSession implements Session {
     return this.#thread
   }
 
-  async #track<T>(queryId: string, thread: Thread, call: Promise<T>): Promise<T> {
-    this.#running = queryId
-    try {
-      return await call
-    } finally {
-      if (this.#running === queryId && this.#thread === thread) this.#running = undefined
-    }
+  /** Ends the thread, and with it every query running on it; the next call starts a fresh one. */
+  #stop(thread: Thread, reason: Error): void {
+    if (this.#thread !== thread) return
+    this.#thread = undefined
+    this.#running.clear()
+    thread.stop(reason)
   }
 
   async listObjects() {
     return this.thread().call('listObjects', {})
   }
 
+  /** Ends the thread once `timeoutMs` has passed; the returned function disarms it. */
+  #armTimeout(thread: Thread, timeoutMs: number | undefined): () => void {
+    if (!timeoutMs || timeoutMs <= 0) return () => undefined
+    const timer = setTimeout(() => {
+      this.#stop(thread, new Error(`Query timed out after ${formatSeconds(timeoutMs)}`))
+    }, timeoutMs)
+    timer.unref()
+    return () => clearTimeout(timer)
+  }
+
   async query(sql: string, opts: QueryOptions): Promise<QueryCursor> {
     const thread = this.thread()
-    const result = await this.#track(opts.queryId, thread, thread.call('query', { sql }))
+    // The statement's whole life counts: preparing, and every fetch until the cursor closes.
+    const disarm = this.#armTimeout(thread, opts.timeoutMs)
+    const finish = () => {
+      disarm()
+      this.#running.delete(opts.queryId)
+    }
+    this.#running.add(opts.queryId)
+    let result: ThreadOps['query']['output']
+    try {
+      result = await thread.call('query', { sql })
+    } catch (error) {
+      finish()
+      throw error
+    }
     const { cursorId } = result
-    const session = this
+    if (cursorId === undefined) finish()
     return {
       columns: result.columns,
       affectedRows: result.affectedRows,
       async fetch(count: number): Promise<Row[]> {
         if (cursorId === undefined) return []
-        return session.#track(opts.queryId, thread, thread.call('fetch', { cursorId, count }))
+        return thread.call('fetch', { cursorId, count })
       },
       async close() {
+        finish()
         if (cursorId === undefined) return
         await thread.call('closeCursor', { cursorId }).catch(() => undefined)
       },
@@ -103,10 +131,8 @@ class SqliteSession implements Session {
 
   async cancel(queryId: string): Promise<void> {
     const thread = this.#thread
-    if (!thread || this.#running !== queryId) return
-    this.#thread = undefined
-    this.#running = undefined
-    thread.stop(new Error('Query cancelled'))
+    if (!thread || !this.#running.has(queryId)) return
+    this.#stop(thread, new Error('Query cancelled'))
   }
 
   quoteIdent(name: string): string {

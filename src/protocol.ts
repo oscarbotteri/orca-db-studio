@@ -63,6 +63,13 @@ export interface QueryResult {
   affectedRows?: number
 }
 
+/** One cell's full value as text, cut at 1 MiB (`cut`) so the answer fits the host's limit. */
+export interface CellValue {
+  /** `null` is SQL NULL. */
+  text: string | null
+  cut: boolean
+}
+
 /** Storage key the "Open SQLite File" command sets so the panel shows the chooser. */
 export const CHOOSER_REQUEST_KEY = 'sqlite-chooser-requested'
 
@@ -92,7 +99,17 @@ declare module 'orca' {
       output: OpenTableResult
     }
     'connection.info': { input: { ref: string }; output: { dialect: SqlDialect } }
-    'query.run': { input: { ref: string; sql: string }; output: QueryResult }
+    /** `documentId` names the query document; its rows replace the ones the last run kept. */
+    'query.run': { input: { ref: string; sql: string; documentId: string }; output: QueryResult }
+    /** Stops the document's running query, which then rejects as cancelled. */
+    'query.cancel': { input: { documentId: string }; output: Record<string, never> }
+    /** The full value of a cell of the document's last result, by position. */
+    'query.cell': {
+      input: { documentId: string; row: number; column: number }
+      output: CellValue
+    }
+    /** The document closed: forget the rows its last run kept. */
+    'query.release': { input: { documentId: string }; output: Record<string, never> }
   }
   interface PluginPanelEvents {
     'connections.changed': Record<string, never>
