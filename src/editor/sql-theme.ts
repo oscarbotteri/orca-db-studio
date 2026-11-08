@@ -22,7 +22,7 @@ export const PALETTE_STYLE = `
 const SELECTION = 'color-mix(in srgb, var(--orca-primary) 30%, transparent)'
 
 const editorTheme = EditorView.theme({
-  '&': { backgroundColor: 'var(--orca-background)', color: 'var(--orca-foreground)' },
+  '&': { backgroundColor: 'var(--surface)', color: 'var(--orca-foreground)' },
   '&.cm-focused': { outline: 'none' },
   '.cm-content': { caretColor: 'var(--orca-foreground)' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--orca-foreground)' },
@@ -30,11 +30,12 @@ const editorTheme = EditorView.theme({
     { backgroundColor: SELECTION },
   '.cm-activeLine': { backgroundColor: 'var(--orca-accent)' },
   '.cm-gutters': {
-    backgroundColor: 'var(--orca-background)',
+    backgroundColor: 'var(--surface)',
     color: 'var(--orca-muted-foreground)',
     border: 'none',
     borderRight: '1px solid var(--orca-border)',
   },
+  '.cm-lineNumbers .cm-gutterElement': { padding: '0 12px' },
   '.cm-activeLineGutter': {
     backgroundColor: 'var(--orca-accent)',
     color: 'var(--orca-accent-foreground)',

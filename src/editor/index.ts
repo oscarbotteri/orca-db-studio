@@ -14,8 +14,9 @@ import {
 } from './statements'
 
 const STYLE = `
+  :root { --surface: var(--orca-editor-surface, var(--orca-card)); }
   html, body { margin: 0; height: 100%; }
-  body { display: flex; flex-direction: column; background: var(--orca-background);
+  body { display: flex; flex-direction: column; background: var(--surface);
     color: var(--orca-foreground); font: 13px system-ui, sans-serif; }
   .toolbar { display: flex; gap: 8px; align-items: center; padding: 6px 10px;
     border-bottom: 1px solid var(--orca-border); }
@@ -25,7 +26,7 @@ const STYLE = `
   .chooser { display: flex; gap: 8px; align-items: center; padding: 6px 10px;
     border-bottom: 1px solid var(--orca-border); }
   .chooser[hidden] { display: none; }
-  .chooser select { font: inherit; color: inherit; background: var(--orca-background);
+  .chooser select { font: inherit; color: inherit; background: var(--surface);
     border: 1px solid var(--orca-border); border-radius: 4px; padding: 2px 6px; }
   .chooser .notice { padding: 0; border: 0; }
   .editor { flex: 0 0 40%; overflow: auto; border-bottom: 1px solid var(--orca-border); }
@@ -38,7 +39,7 @@ const STYLE = `
   table.grid { border-collapse: collapse; font-family: ui-monospace, monospace; }
   .grid th, .grid td { border: 1px solid var(--orca-border); padding: 2px 8px; text-align: left;
     white-space: nowrap; }
-  .grid th { position: sticky; top: 0; background: var(--orca-background); }
+  .grid th { position: sticky; top: 0; background: var(--surface); }
   .grid td.null { opacity: .5; font-style: italic; }
 `
 
