@@ -141,14 +141,15 @@ orca plugin dev watch .   # loads the plugin into Orca and reloads on save
 
 ### Useful commands
 
-| Command                | What it does                                                         |
-| ---------------------- | -------------------------------------------------------------------- |
-| `npm run verify`       | Typecheck, `orca plugin validate`, lint and format check             |
-| `orca plugin test .`   | Unit and component tests                                             |
-| `orca plugin check .`  | Render checks for the panel and the editor                           |
-| `npm run test:drivers` | Integration tests on real engines with Testcontainers (needs Docker) |
-| `npm run build`        | Bundle the pure-JS drivers and CodeMirror into `vendor/`             |
-| `npm run qa:up`        | Start the manual QA environment (see [`test/qa`](test/qa/README.md)) |
+| Command                         | What it does                                                                            |
+| ------------------------------- | --------------------------------------------------------------------------------------- |
+| `npm run verify`                | Typecheck, `orca plugin validate`, lint and format check                                |
+| `orca plugin test .`            | Unit and component tests                                                                |
+| `orca plugin check .`           | Render checks for the panel and the editor                                              |
+| `npm run test:drivers`          | Integration tests on real engines with Testcontainers (needs Docker)                    |
+| `npm run test:drivers:coverage` | Driver tests with coverage of `src/drivers/`; HTML report in `coverage/` (needs Docker) |
+| `npm run build`                 | Bundle the pure-JS drivers and CodeMirror into `vendor/`                                |
+| `npm run qa:up`                 | Start the manual QA environment (see [`test/qa`](test/qa/README.md))                    |
 
 ## Project layout
 
