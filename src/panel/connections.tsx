@@ -163,6 +163,19 @@ export function ServerConnections() {
   )
 }
 
+export function WorktreeConnections() {
+  const list = read(connections)
+  const entries = list.status === 'loaded' ? list.value.worktrees : []
+  // Most workspaces define none: the group appears only for those that do.
+  if (entries.length === 0) return null
+  return (
+    <Stack gap="sm">
+      <Heading level={3}>Worktree connections</Heading>
+      <ConnectionTree label="Worktree connections" entries={entries} />
+    </Stack>
+  )
+}
+
 export function SqliteFiles() {
   const list = read(connections)
   return (

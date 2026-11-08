@@ -25,7 +25,9 @@ const FOUND = {
 describe('SQLite files group', () => {
   test('offers to open a file when there are none', async () => {
     const p = await mount(panel, {
-      host: mockHost({ requests: { 'connections.list': { sqliteFiles: [], servers: [] } } }),
+      host: mockHost({
+        requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [] } },
+      }),
     })
 
     expect(p.find({ label: 'No SQLite files' })).not.toBeNull()
@@ -34,7 +36,7 @@ describe('SQLite files group', () => {
   test('expanding a connection shows its schemas, tables and views', async () => {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [SHOP], servers: [] },
+        'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
         'explorer.listObjects': SHOP_TREE,
       },
     })
@@ -60,7 +62,7 @@ describe('removing a SQLite file', () => {
     let files = [SHOP]
     const host = mockHost({
       requests: {
-        'connections.list': () => ({ sqliteFiles: files, servers: [] }),
+        'connections.list': () => ({ sqliteFiles: files, servers: [], worktrees: [] }),
         'explorer.listObjects': SHOP_TREE,
         'sqlite.remove': (input: { path: string }) => {
           files = files.filter((f) => f.ref !== input.path)
@@ -85,7 +87,7 @@ describe('removing a SQLite file', () => {
 
   test('Cancel leaves the file in the list', async () => {
     const host = mockHost({
-      requests: { 'connections.list': { sqliteFiles: [SHOP], servers: [] } },
+      requests: { 'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] } },
     })
     const p = await mount(panel, { host })
 
@@ -101,7 +103,7 @@ describe('removing a SQLite file', () => {
   test('shows why a removal failed', async () => {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [SHOP], servers: [] },
+        'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
         'sqlite.remove': () => {
           throw hostError('action_failed', 'No connection /data/shop.db')
         },
@@ -121,7 +123,7 @@ describe('SQLite file chooser', () => {
     let added: string | undefined
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [], servers: [] },
+        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
         'sqlite.findFiles': FOUND,
         'sqlite.add': ({ path }) => {
           added = path
@@ -141,7 +143,7 @@ describe('SQLite file chooser', () => {
   test('shows why a pasted path could not be added', async () => {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [], servers: [] },
+        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
         'sqlite.findFiles': { files: [] },
         'sqlite.add': () => {
           throw hostError('action_failed', '/tmp/notes.txt is not a SQLite database')
@@ -160,7 +162,10 @@ describe('SQLite file chooser', () => {
   test('opens when the Open SQLite File command asked for it', async () => {
     const host = mockHost({
       storage: { [CHOOSER_REQUEST_KEY]: true },
-      requests: { 'connections.list': { sqliteFiles: [], servers: [] }, 'sqlite.findFiles': FOUND },
+      requests: {
+        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
+        'sqlite.findFiles': FOUND,
+      },
     })
     const p = await mount(panel, { host })
 
@@ -175,7 +180,10 @@ describe('SQLite file chooser', () => {
 
   test('opens with the found files when the command runs while the panel is open', async () => {
     const host = mockHost({
-      requests: { 'connections.list': { sqliteFiles: [], servers: [] }, 'sqlite.findFiles': FOUND },
+      requests: {
+        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
+        'sqlite.findFiles': FOUND,
+      },
     })
     const p = await mount(panel, { host })
 
@@ -193,7 +201,7 @@ describe('opening a table', () => {
   async function mountShop(open: (input: unknown) => unknown) {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [SHOP], servers: [] },
+        'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
         'explorer.listObjects': {
           schemas: [{ name: 'main', objects: [{ name: 'orders', kind: 'table' }] }],
         },
@@ -249,6 +257,29 @@ describe('opening a table', () => {
   })
 })
 
+describe('worktree connections', () => {
+  const API = { ref: 'env:DATABASE_URL:w1', name: 'api', detail: 'app@db:5432/shop' }
+
+  test('lists each worktree connection in its own group', async () => {
+    const host = mockHost({
+      requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [API] } },
+    })
+    const p = await mount(panel, { host })
+
+    expect(p.find({ text: 'Worktree connections' })).not.toBeNull()
+    expect(p.find({ text: 'api' })).not.toBeNull()
+  })
+
+  test('shows no group when no workspace defines the variable', async () => {
+    const host = mockHost({
+      requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [] } },
+    })
+    const p = await mount(panel, { host })
+
+    expect(p.find({ text: 'Worktree connections' })).toBeNull()
+  })
+})
+
 describe('connection form', () => {
   const PG = { ref: 'c1', name: 'Shop DB', detail: 'app@db.internal:5432/shop' }
   const FORM = {
@@ -263,7 +294,7 @@ describe('connection form', () => {
   async function mountWith(requests: Record<string, unknown> = {}) {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [], servers: [PG] },
+        'connections.list': { sqliteFiles: [], servers: [PG], worktrees: [] },
         ...requests,
       } as never,
     })

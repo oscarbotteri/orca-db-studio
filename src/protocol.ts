@@ -15,6 +15,8 @@ export interface ConnectionList {
   sqliteFiles: ConnectionEntry[]
   /** Saved connections to a database server. */
   servers: ConnectionEntry[]
+  /** One per local workspace whose .env defines the connection variable; named for the workspace. */
+  worktrees: ConnectionEntry[]
 }
 
 /** The server engines the connection form offers. */

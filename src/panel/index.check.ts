@@ -61,7 +61,7 @@ const FOUND_FILES = {
 
 export default defineCheck({
   empty: {
-    requests: { 'connections.list': { sqliteFiles: [], servers: [] } },
+    requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [] } },
   },
   tree: {
     persisted: {
@@ -70,23 +70,27 @@ export default defineCheck({
       },
     },
     requests: {
-      'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [] },
+      'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [], worktrees: [] },
       'explorer.listObjects': SHOP_TREE,
     },
   },
   'remove-file': {
     persisted: { plugin: { 'sqlite-removal': { entry: SHOP, error: null } } },
-    requests: { 'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [] } },
+    requests: {
+      'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [], worktrees: [] },
+    },
   },
   'remove-file-dark': {
     theme: 'dark',
     persisted: { plugin: { 'sqlite-removal': { entry: SHOP, error: null } } },
-    requests: { 'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [] } },
+    requests: {
+      'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [], worktrees: [] },
+    },
   },
   chooser: {
     storage: { [CHOOSER_REQUEST_KEY]: true },
     requests: {
-      'connections.list': { sqliteFiles: [SHOP], servers: [] },
+      'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
       'sqlite.findFiles': FOUND_FILES,
     },
   },
@@ -94,13 +98,13 @@ export default defineCheck({
     theme: 'dark',
     storage: { [CHOOSER_REQUEST_KEY]: true },
     requests: {
-      'connections.list': { sqliteFiles: [], servers: [] },
+      'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
       'sqlite.findFiles': { files: [] },
     },
   },
   form: {
     persisted: { plugin: { 'connection-form': FILLED_FORM } },
-    requests: { 'connections.list': { sqliteFiles: [], servers: [SHOP_DB] } },
+    requests: { 'connections.list': { sqliteFiles: [], servers: [SHOP_DB], worktrees: [] } },
   },
   'form-error': {
     theme: 'dark',
@@ -115,6 +119,6 @@ export default defineCheck({
         },
       },
     },
-    requests: { 'connections.list': { sqliteFiles: [], servers: [SHOP_DB] } },
+    requests: { 'connections.list': { sqliteFiles: [], servers: [SHOP_DB], worktrees: [] } },
   },
 })

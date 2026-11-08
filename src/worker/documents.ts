@@ -5,6 +5,7 @@ import type { OrcaWorkerApi } from 'orca/worker'
 import type { OpenTableResult } from '../protocol'
 import type { Connections } from './connections'
 import { type LocalWorkspace, listLocalWorkspaces } from './local-workspaces'
+import { parseWorktreeRef } from './worktree-connections'
 
 const FOLDER = '.db-studio'
 /** The table query is a starting point; the person edits it. */
@@ -68,7 +69,9 @@ export async function openTable(
 
   const schema = await connections.quoteIdent(input.ref, input.schema)
   const table = await connections.quoteIdent(input.ref, input.table)
-  const target = await targetWorkspace(orca, workspaces, input.workspaceId)
+  // A worktree connection's document belongs in the worktree the connection was read from.
+  const workspaceId = input.workspaceId ?? parseWorktreeRef(input.ref)?.workspaceId
+  const target = await targetWorkspace(orca, workspaces, workspaceId)
   if (!target) {
     return {
       status: 'choose-workspace',

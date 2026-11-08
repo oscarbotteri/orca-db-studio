@@ -81,7 +81,11 @@ export function loadExpandedObjects(): void {
   const list = read(connections)
   if (list.status !== 'loaded') return
   const open = new Set(read(expanded))
-  for (const { ref } of [...list.value.sqliteFiles, ...list.value.servers]) {
+  for (const { ref } of [
+    ...list.value.sqliteFiles,
+    ...list.value.servers,
+    ...list.value.worktrees,
+  ]) {
     if (open.has(connectionKey(ref)) && !read(objects)[ref]) void loadObjects(ref)
   }
 }

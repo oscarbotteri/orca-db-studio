@@ -21,6 +21,7 @@ import {
   passwordOf,
   saveServer,
 } from './saved-connections'
+import { listWorktreeConnections, parseWorktreeRef, resolveWorktree } from './worktree-connections'
 
 /** The registry keeps a SQLite file's path and nothing else. */
 const SQLITE_FILES_KEY = 'sqlite-files'
@@ -87,10 +88,25 @@ async function removeSqliteFile(orca: OrcaWorkerApi, path: string): Promise<void
   orca.panels.post('connections.changed', {})
 }
 
-async function configFor(orca: OrcaWorkerApi, ref: string): Promise<ConnectionConfig> {
-  if ((await storedSqliteFiles(orca)).includes(ref)) return { engine: 'sqlite', path: ref }
+/** What a ref points at now, and how to get its password. */
+interface Target {
+  config: ConnectionConfig
+  password: () => Promise<string | undefined>
+  /** Set for worktree connections, whose target is re-read on every use: it changes with the URL. */
+  stamp?: string
+}
+
+async function targetFor(orca: OrcaWorkerApi, ref: string): Promise<Target> {
+  const worktree = parseWorktreeRef(ref)
+  if (worktree) {
+    const { config, password, url } = await resolveWorktree(orca, worktree)
+    return { config, password: async () => password, stamp: url }
+  }
+  if ((await storedSqliteFiles(orca)).includes(ref)) {
+    return { config: { engine: 'sqlite', path: ref }, password: async () => undefined }
+  }
   const server = await findServer(orca, ref)
-  if (server) return server
+  if (server) return { config: server, password: () => passwordOf(orca, ref) }
   throw new Error(`No connection ${ref}`)
 }
 
@@ -98,24 +114,35 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
   const sessions = new Map<string, Promise<Session>>()
   const engine = createQueryEngine()
 
-  async function openSession(ref: string, config: ConnectionConfig): Promise<Session> {
-    return connect(config, config.engine === 'sqlite' ? undefined : await passwordOf(orca, ref))
+  /** The stamp each worktree session was opened with. */
+  const stamps = new Map<string, string>()
+
+  async function openSession(target: Target): Promise<Session> {
+    return connect(target.config, await target.password())
   }
 
   function forget(ref: string): void {
     const open = sessions.get(ref)
     sessions.delete(ref)
+    stamps.delete(ref)
     void open?.then((s) => s.close()).catch(() => undefined)
   }
 
-  function session(ref: string, config: ConnectionConfig): Promise<Session> {
+  async function sessionFor(ref: string): Promise<Session> {
+    const target = await targetFor(orca, ref)
+    // The .env changed since this session opened: it points somewhere else now.
+    if (target.stamp !== undefined && stamps.get(ref) !== target.stamp) forget(ref)
     let opened = sessions.get(ref)
     if (!opened) {
-      opened = openSession(ref, config)
+      opened = openSession(target)
       sessions.set(ref, opened)
+      if (target.stamp !== undefined) stamps.set(ref, target.stamp)
       // A failed connect is not cached: the next request tries again.
       opened.catch(() => {
-        if (sessions.get(ref) === opened) sessions.delete(ref)
+        if (sessions.get(ref) === opened) {
+          sessions.delete(ref)
+          stamps.delete(ref)
+        }
       })
     }
     return opened
@@ -126,6 +153,8 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
       return {
         sqliteFiles: (await storedSqliteFiles(orca)).map(sqliteEntry),
         servers: await listServers(orca),
+        // Saved connections stay usable when Orca cannot list its workspaces.
+        worktrees: await listWorktreeConnections(orca).catch(() => []),
       }
     },
     async saveServer(input) {
@@ -153,16 +182,16 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
       forget(path)
     },
     async listObjects(ref) {
-      return (await session(ref, await configFor(orca, ref))).listObjects()
+      return (await sessionFor(ref)).listObjects()
     },
     async dialect(ref) {
-      return (await session(ref, await configFor(orca, ref))).dialect
+      return (await sessionFor(ref)).dialect
     },
     async quoteIdent(ref, name) {
-      return (await session(ref, await configFor(orca, ref))).quoteIdent(name)
+      return (await sessionFor(ref)).quoteIdent(name)
     },
     async runQuery(ref, sql, options) {
-      return engine.run(await session(ref, await configFor(orca, ref)), sql, options)
+      return engine.run(await sessionFor(ref), sql, options)
     },
     cancelQuery(documentId) {
       return engine.cancel(documentId)
@@ -176,6 +205,7 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
     async closeAll() {
       const open = [...sessions.values()]
       sessions.clear()
+      stamps.clear()
       await Promise.allSettled(open.map(async (s) => (await s).close()))
     },
   }

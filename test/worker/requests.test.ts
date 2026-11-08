@@ -86,7 +86,11 @@ describe('sqlite.add', () => {
     const added = await w.request('sqlite.add', { path })
 
     expect(added).toEqual({ ref: path, name: 'shop.db', detail: basename(root) })
-    expect(await w.request('connections.list')).toEqual({ sqliteFiles: [added], servers: [] })
+    expect(await w.request('connections.list')).toEqual({
+      sqliteFiles: [added],
+      servers: [],
+      worktrees: [],
+    })
     expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
   })
 
@@ -108,7 +112,11 @@ describe('sqlite.add', () => {
     await expect(w.request('sqlite.add', { path })).rejects.toThrow(
       `${path} is not a SQLite database`,
     )
-    expect(await w.request('connections.list')).toEqual({ sqliteFiles: [], servers: [] })
+    expect(await w.request('connections.list')).toEqual({
+      sqliteFiles: [],
+      servers: [],
+      worktrees: [],
+    })
   })
 
   test('refuses a relative path', async () => {
