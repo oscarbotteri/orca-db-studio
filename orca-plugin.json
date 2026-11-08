@@ -1,9 +1,48 @@
 {
+  "$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schemas/plugins/orca-plugin.v2.schema.json",
   "manifestVersion": 2,
   "id": "db-studio",
   "name": "DB Studio",
   "version": "0.1.0",
   "description": "Browse and query PostgreSQL, MySQL/MariaDB and SQLite from Orca. Reads each worktree's .env to offer its database.",
+  "author": {
+    "name": "Oscar Botteri",
+    "url": "https://github.com/oscarbotteri"
+  },
+  "repository": "https://github.com/oscarbotteri/orca-db-studio",
+  "homepage": "https://github.com/oscarbotteri/orca-db-studio",
+  "license": "MIT",
+  "icon": "docs/assets/db-studio.png",
+  "cover": {
+    "path": "docs/assets/cover.png",
+    "alt": "DB Studio inside Orca: the customers table open in the SQL editor with its result grid, and the connections panel listing the tables on the right"
+  },
+  "screenshots": [
+    {
+      "path": "docs/assets/screenshots/editor-query-dark.png",
+      "alt": "A custom SQL query and its result grid in DB Studio, in Orca's dark theme",
+      "caption": "Run your own queries and read the results in a grid",
+      "theme": "dark"
+    },
+    {
+      "path": "docs/assets/screenshots/editor-query-light.png",
+      "alt": "A custom SQL query and its result grid in DB Studio, in Orca's light theme",
+      "caption": "Run your own queries and read the results in a grid",
+      "theme": "light"
+    },
+    {
+      "path": "docs/assets/screenshots/panel-dark.png",
+      "alt": "The DB Studio panel listing the tables and views of a PostgreSQL connection, in Orca's dark theme",
+      "caption": "Browse the tables and views of a connection",
+      "theme": "dark"
+    },
+    {
+      "path": "docs/assets/screenshots/panel-light.png",
+      "alt": "The DB Studio panel listing the tables and views of a PostgreSQL connection, in Orca's light theme",
+      "caption": "Browse the tables and views of a connection",
+      "theme": "light"
+    }
+  ],
   "engines": {
     "orca": ">=1.4.248"
   },

@@ -3,3 +3,6 @@ declare module '*/vendor/pg.js' {
   export { default as pg } from 'pg'
   export { default as Cursor } from 'pg-cursor'
 }
+declare module '*/vendor/mysql2.js' {
+  export { default as mysql } from 'mysql2'
+}

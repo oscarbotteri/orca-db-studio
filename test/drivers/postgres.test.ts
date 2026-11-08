@@ -164,7 +164,7 @@ for (const image of VERSIONS) {
           timeoutMs: 500,
         })
         await expect(cursor.fetch(1)).rejects.toThrow(/statement timeout/i)
-        expect(await activeQueries('timeout_marker')).toBe(0)
+        await expect.poll(() => activeQueries('timeout_marker')).toBe(0)
         // The timeout belongs to that query only.
         const slow = await fetchAll(session, 'SELECT pg_sleep(1), 3')
         expect(slow.rows).toHaveLength(1)

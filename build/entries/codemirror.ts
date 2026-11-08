@@ -8,6 +8,14 @@ export {
   SQLite,
   sql,
 } from '@codemirror/lang-sql'
-export { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
-export { EditorState } from '@codemirror/state'
-export { EditorView, keymap, lineNumbers } from '@codemirror/view'
+export { bracketMatching, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+export { tags } from '@lezer/highlight'
+export { EditorState, type Extension } from '@codemirror/state'
+export {
+  drawSelection,
+  EditorView,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  keymap,
+  lineNumbers,
+} from '@codemirror/view'

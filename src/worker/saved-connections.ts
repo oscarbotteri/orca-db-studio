@@ -44,15 +44,12 @@ export function validateForm(form: ConnectionForm): void {
   if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) {
     throw new Error('Enter a port between 1 and 65535')
   }
-  if (form.engine !== 'postgres') {
-    throw new Error('MySQL and MariaDB connections are not available yet')
-  }
 }
 
 export function configOf(form: ConnectionForm): ConnectionConfig {
   validateForm(form)
   return {
-    engine: 'postgres',
+    engine: form.engine,
     host: form.host.trim(),
     port: form.port,
     database: form.database.trim(),
