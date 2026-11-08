@@ -13,7 +13,7 @@ DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB 
 ## Conventions worth knowing
 
 - `src/drivers/` is the only place that knows which engine is behind a connection. Code outside it must not branch on engine type — add a method to the driver interface instead.
-- Every tab is a `.sql` query document whose first line names its connection. There is no table view and no `.db` custom editor.
+- Every tab is a `.sql` query document whose first line names its connection; a `.sql` file without that line opens with a "Choose connection" control that writes it (ADR 0003). There is no table view and no `.db` custom editor.
 - UI code lives in `src/editor/` (query document editor: SQL editor, grid) and `src/panel/` (connections, explorer). Promote to a shared folder only when both actually need it.
 
 ## Global conventions
