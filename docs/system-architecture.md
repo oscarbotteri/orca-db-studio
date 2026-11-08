@@ -115,6 +115,11 @@ Engine notes:
   - `statement_timeout` is the server's own limit and restarts on every batch read (each is a separate Execute), so it bounds each batch, not the whole stream. The row limit and result ceiling bound the stream.
   - The cursor's describe step is reached through pg-cursor's internal hooks (`submit`, `handleRowDescription`, `handleError`), patched by name in `src/drivers/postgres.ts`. After a `pg` or `pg-cursor` bump, run `npm run test:drivers`.
 - **MySQL/MariaDB:** `mysql2` row streaming through its callback API (the promise API buffers), with `multipleStatements` off and `supportBigNumbers`/`bigNumberStrings` on; cancel via `KILL QUERY` from a second connection.
+  - A result's columns arrive with its first rows, so `query()` resolves only once the server has started answering; cancel works while it is still pending.
+  - The server's timeout is `max_execution_time` on MySQL, which limits `SELECT` only, and `max_statement_time` on MariaDB, which limits any statement. Like Postgres, it is the server that ends the query.
+  - The connection is always `utf8mb4`: the server converts columns to it, so the bundle decodes no other character set. A server that cannot convert a column to utf8mb4 is not supported.
+  - Every `BIGINT` and `DECIMAL` is a string, and a bare `SELECT 1` is a `BIGINT` on MySQL but an `INT` on MariaDB.
+  - A cursor closed before its result ends runs `KILL QUERY` first: the connection is busy until the server has sent the rest.
 - **SQLite:** `node:sqlite` in a `worker_threads` thread, iterating rows with `statement.iterate()`; cancel and timeout terminate the thread.
 
 ## Orca platform limits

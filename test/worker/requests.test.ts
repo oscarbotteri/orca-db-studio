@@ -617,15 +617,21 @@ describe('editing and deleting a connection', () => {
     await expect(w.request('connection.get', { ref })).rejects.toThrow(`No connection ${ref}`)
   })
 
-  test('refuses an invalid form and a MySQL connection for now', async () => {
+  test('refuses an invalid form', async () => {
     const w = await mountWorker(worker, { host: mockHost() })
 
     await expect(w.request('connection.save', { form: { ...PG_FORM, host: ' ' } })).rejects.toThrow(
       'Enter a host',
     )
-    await expect(
-      w.request('connection.save', { form: { ...PG_FORM, engine: 'mysql' } }),
-    ).rejects.toThrow(/not available yet/)
+  })
+
+  test('saves a MySQL connection', async () => {
+    const w = await mountWorker(worker, { host: mockHost() })
+    const form = { ...PG_FORM, engine: 'mysql' as const, port: 3306 }
+
+    const { ref } = await w.request('connection.save', { form, password: 'pw' })
+
+    expect((await w.request('connection.get', { ref })).form).toEqual(form)
   })
 })
 

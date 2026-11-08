@@ -3,6 +3,7 @@ import type { Driver, Engine } from './types'
 
 const loaders: Record<Engine, () => Promise<Driver>> = {
   postgres: async () => (await import('./postgres')).postgresDriver,
+  mysql: async () => (await import('./mysql')).mysqlDriver,
   sqlite: async () => (await import('./sqlite')).sqliteDriver,
 }
 

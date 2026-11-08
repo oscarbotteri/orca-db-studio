@@ -152,7 +152,7 @@ export function ServerConnections() {
         </Callout>
       ) : null}
       {entries.length === 0 ? (
-        <Text muted>No saved connections. Press + to add a PostgreSQL connection.</Text>
+        <Text muted>No saved connections. Press + to add a connection.</Text>
       ) : (
         <>
           <ConnectionTree label="Connections" entries={entries} onActionConnection={openEditForm} />

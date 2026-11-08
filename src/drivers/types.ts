@@ -1,6 +1,6 @@
 // Driver, Session and Cursor interfaces. Code outside src/drivers never branches on engine.
 
-export type Engine = 'postgres' | 'sqlite'
+export type Engine = 'postgres' | 'mysql' | 'sqlite'
 
 export interface SqliteConfig {
   engine: 'sqlite'
@@ -15,10 +15,18 @@ export interface PostgresConfig {
   user: string
 }
 
-/** The SQL flavour an editor highlights for. */
-export type SqlDialect = 'postgres' | 'sqlite'
+export interface MysqlConfig {
+  engine: 'mysql'
+  host: string
+  port: number
+  database: string
+  user: string
+}
 
-export type ConnectionConfig = PostgresConfig | SqliteConfig
+/** The SQL flavour an editor highlights for. */
+export type SqlDialect = 'postgres' | 'mysql' | 'mariadb' | 'sqlite'
+
+export type ConnectionConfig = PostgresConfig | MysqlConfig | SqliteConfig
 
 export interface Driver {
   connect(config: ConnectionConfig, secret: string | undefined): Promise<Session>

@@ -17,7 +17,7 @@ export interface ConnectionList {
   servers: ConnectionEntry[]
 }
 
-/** The engines the form offers; the worker refuses the ones without a driver yet. */
+/** The server engines the connection form offers. */
 export type ServerEngine = 'postgres' | 'mysql'
 
 /** What the connection form edits; the password travels beside it and is never stored here. */
