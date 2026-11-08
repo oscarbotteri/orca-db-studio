@@ -20,7 +20,7 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/demo.png" alt="DB Studio in Orca: a query and its result grid">
+  <img src="docs/assets/cover.png" alt="DB Studio in Orca: a query and its result grid">
 </p>
 
 ## What is it?
