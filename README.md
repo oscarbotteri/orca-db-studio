@@ -19,6 +19,10 @@
 
 ---
 
+<p align="center">
+  <img src="docs/assets/demo.png" alt="DB Studio in Orca: a query and its result grid">
+</p>
+
 ## What is it?
 
 DB Studio is an [Orca](https://github.com/stablyai/orca) plugin for looking at a database from the place you already work.
