@@ -1,7 +1,7 @@
 // Query document editor: a custom editor for .sql files. Q1, G1, ADR 0003
 import type { ConnectionEntry, SqlDialect } from '../protocol'
 import { createConnectionChooser } from './connection-chooser'
-import { chooserState } from './connection-state'
+import { chooserState, connectionEntries } from './connection-state'
 import { renderError, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
 import {
@@ -74,7 +74,7 @@ document.body.append(toolbar, editorHost, result)
 const ref = connectionRef(doc.value)
 let entries: ConnectionEntry[] | undefined
 try {
-  entries = (await orca.plugin.request('connections.list')).sqliteFiles
+  entries = connectionEntries(await orca.plugin.request('connections.list'))
 } catch {
   // Without the list the document's own line stands; connection.info below still checks it.
 }

@@ -1,9 +1,14 @@
 // Whether a query document must offer the connection chooser, and what it tells the person. Q1
-import type { ConnectionEntry } from '../protocol'
+import type { ConnectionEntry, ConnectionList } from '../protocol'
 
 export interface ChooserState {
   needsChoice: boolean
   notice: string | undefined
+}
+
+/** Every connection a document may name: SQLite files and saved servers alike. */
+export function connectionEntries(list: ConnectionList): ConnectionEntry[] {
+  return [...list.sqliteFiles, ...list.servers]
 }
 
 /**
