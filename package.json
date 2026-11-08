@@ -20,7 +20,11 @@
     "test": "orca plugin test .",
     "test:drivers": "vitest run --config test/vitest.config.ts",
     "validate": "orca plugin validate .",
-    "verify": "tsc --noEmit && orca plugin validate . && npm run lint && npm run format:check"
+    "verify": "tsc --noEmit && orca plugin validate . && npm run lint && npm run format:check",
+    "qa:up": "node test/qa/qa.ts up",
+    "qa:down": "node test/qa/qa.ts down",
+    "qa:reset": "node test/qa/qa.ts reset",
+    "qa:seed:sqlite": "node test/qa/seed-sqlite.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",

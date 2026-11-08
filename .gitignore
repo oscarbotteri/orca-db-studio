@@ -15,3 +15,7 @@ coverage/
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# Manual QA environment: generated data and local env (test/qa)
+test/qa/data/
+test/qa/.env*
