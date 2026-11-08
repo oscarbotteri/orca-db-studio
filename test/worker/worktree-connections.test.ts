@@ -129,6 +129,15 @@ describe('connections.list worktrees', () => {
   })
 })
 
+describe('panel detail', () => {
+  test('leaves out a missing user and database', async () => {
+    const { worker: w } = await start([{ name: 'api', env: 'DATABASE_URL=postgres://localhost\n' }])
+
+    expect((await w.request('connections.list')).worktrees[0]?.detail).toBe('localhost:5432')
+    await w.deactivate()
+  })
+})
+
 describe('dotenv syntax', () => {
   test('reads a BOM-prefixed file and a value with an escaped quote', async () => {
     const { worker: w } = await start([
@@ -147,6 +156,19 @@ describe('dotenv syntax', () => {
 })
 
 describe('worktree connection refs', () => {
+  test('a ref naming another variable than the configured one is refused', async () => {
+    const env = `DATABASE_URL=${PG}\nOTHER_URL=${PG}\n`
+    const { worker: w } = await start([{ name: 'api', env }])
+    const ref = (await w.request('connections.list')).worktrees[0]?.ref ?? ''
+    await w.deactivate()
+    const { worker: changed } = await start([{ name: 'api', env }], { envVariable: 'OTHER_URL' })
+
+    await expect(changed.request('explorer.listObjects', { ref })).rejects.toThrow(
+      /not the configured connection variable/,
+    )
+    await changed.deactivate()
+  })
+
   test('a ref that is not listed fails like any unknown connection', async () => {
     const { worker: w } = await start([{ name: 'api' }])
 

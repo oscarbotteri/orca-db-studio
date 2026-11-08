@@ -95,7 +95,7 @@ function targetOf(url: string | undefined): WorktreeTarget | undefined {
   return {
     config: { engine, host, port, database, user },
     password: password || undefined,
-    detail: `${user}@${host}:${port}/${database}`,
+    detail: `${user ? `${user}@` : ''}${host}:${port}${database ? `/${database}` : ''}`,
     url,
   }
 }
@@ -121,6 +121,10 @@ export async function resolveWorktree(
   orca: OrcaWorkerApi,
   ref: WorktreeRef,
 ): Promise<WorktreeTarget> {
+  // A document may name any variable; only the configured one is read, as the panel lists it.
+  if (ref.variable !== (await variableName(orca))) {
+    throw new Error(`${ref.variable} is not the configured connection variable`)
+  }
   const workspace = (await listLocalWorkspaces(orca)).find((w) => w.id === ref.workspaceId)
   if (!workspace) throw new Error('That workspace is no longer open')
   const target = targetOf(await variableIn(workspace.path, ref.variable))
