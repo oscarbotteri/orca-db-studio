@@ -151,6 +151,8 @@ orca plugin dev watch .   # loads the plugin into Orca and reloads on save
 | `npm run build`                 | Bundle the pure-JS drivers and CodeMirror into `vendor/`                                |
 | `npm run qa:up`                 | Start the manual QA environment (see [`test/qa`](test/qa/README.md))                    |
 
+`sqlite-thread.ts` always reads 0% in the coverage report: it runs in a `worker_threads` worker, which the main-process V8 coverage does not see, although the SQLite tests do exercise it. Read the SQLite total with that in mind.
+
 ## Project layout
 
 ```
