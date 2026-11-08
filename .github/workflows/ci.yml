@@ -20,9 +20,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # test:drivers starts PostgreSQL, MySQL and MariaDB with Testcontainers,
+        # test:drivers:coverage starts PostgreSQL, MySQL and MariaDB with Testcontainers,
         # which uses the Docker daemon already present on the runner.
-        task: [format:check, lint, typecheck, test:drivers, build:check]
+        task: [format:check, lint, typecheck, test:drivers:coverage, build:check]
     steps:
       - uses: actions/checkout@v7
 
