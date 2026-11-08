@@ -59,6 +59,16 @@ async function writeDocument(dir: string, stem: string, content: string): Promis
   }
 }
 
+/** `.db-studio/` in the workspace, ignoring itself so the repo's own .gitignore is never touched. */
+async function queryFolder(workspace: LocalWorkspace): Promise<string> {
+  const dir = join(workspace.path, FOLDER)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, '.gitignore'), '*\n', { flag: 'wx' }).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  })
+  return dir
+}
+
 export async function openTable(
   orca: OrcaWorkerApi,
   connections: Connections,
@@ -79,14 +89,8 @@ export async function openTable(
     }
   }
 
-  const dir = join(target.path, FOLDER)
-  await mkdir(dir, { recursive: true })
-  // The folder ignores itself, so the repo's own .gitignore is never touched.
-  await writeFile(join(dir, '.gitignore'), '*\n', { flag: 'wx' }).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-  })
   const name = await writeDocument(
-    dir,
+    await queryFolder(target),
     fileStem(input.table),
     `-- db-studio: connection=${input.ref}\nSELECT * FROM ${schema}.${table} LIMIT ${TABLE_QUERY_LIMIT}\n`,
   )
