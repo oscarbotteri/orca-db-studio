@@ -49,6 +49,8 @@ export interface SqlEditor {
   change(change: TextChange): void
   /** Completes the connection's tables and columns too; the text, cursor and undo history stay. */
   setCompletion(dialect: SqlDialect, schema: CompletionSchema | undefined): void
+  /** Back to keywords only, in the dialect the editor has now. */
+  clearSchema(): void
 }
 
 /** The SQL language, and with a schema also the columns of the tables a statement reads from. */
@@ -91,6 +93,7 @@ function extensions(options: SqlEditorOptions, sqlLanguage: Compartment): Extens
 
 export function createSqlEditor(options: SqlEditorOptions): SqlEditor {
   const sqlLanguage = new Compartment()
+  let dialect = options.dialect
   const view = new EditorView({
     parent: options.parent,
     state: EditorState.create({ doc: options.text, extensions: extensions(options, sqlLanguage) }),
@@ -108,8 +111,12 @@ export function createSqlEditor(options: SqlEditorOptions): SqlEditor {
     change(change) {
       view.dispatch({ changes: change })
     },
-    setCompletion(dialect, schema) {
+    setCompletion(next, schema) {
+      dialect = next
       view.dispatch({ effects: sqlLanguage.reconfigure(language(dialect, schema)) })
+    },
+    clearSchema() {
+      view.dispatch({ effects: sqlLanguage.reconfigure(language(dialect, undefined)) })
     },
   }
 }

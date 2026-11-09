@@ -132,6 +132,8 @@ let loadedRef: string | undefined
 /** The editor already completes keywords, so a schema that cannot load changes nothing. */
 async function loadSchema(schemaRef: string): Promise<void> {
   const mine = ++latestSchema
+  // Another connection's tables must not complete here, whether or not the load below succeeds.
+  if (loadedRef !== undefined && loadedRef !== schemaRef) editor.clearSchema()
   loadedRef = schemaRef
   try {
     // The dialect comes with the schema: the line naming the connection may have been edited by hand.
@@ -146,7 +148,7 @@ async function loadSchema(schemaRef: string): Promise<void> {
 }
 
 function loadOpenSchema(): void {
-  if (ref !== undefined && dialect !== undefined) void loadSchema(ref)
+  if (ref !== undefined && dialect !== undefined && loadedRef !== ref) void loadSchema(ref)
 }
 
 let running = false
