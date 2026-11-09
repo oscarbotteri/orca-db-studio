@@ -112,6 +112,9 @@ function renderConnection(named: string | undefined): void {
 /** The last name the registry did not know, so a missing connection is looked for once, not per key. */
 let missed: string | undefined
 
+/** Only the latest reload may land: an earlier, slower answer is stale by then. */
+let latestReload = 0
+
 function showConnection(named: string | undefined): void {
   renderConnection(named)
   const known = entries?.some((entry) => entry.ref === named)
@@ -193,9 +196,6 @@ orca.plugin.on('connections.changed', () => void reloadEntries())
 orca.storage.onDidChange(({ key }) => {
   if (key === SAVED_CONNECTIONS_KEY) void reloadEntries()
 })
-
-/** Only the latest reload may land: an earlier, slower answer is stale by then. */
-let latestReload = 0
 
 async function reloadEntries(): Promise<void> {
   const mine = ++latestReload
