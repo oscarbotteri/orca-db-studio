@@ -75,10 +75,15 @@ export function openNewForm(engine: Engine = 'postgres'): void {
   set(formDraft, blankDraft(engine))
 }
 
-/** The "Open SQLite File" command: a new connection on SQLite. X3 */
+/**
+ * The "Open SQLite File" command: a new connection on SQLite. A new connection already open turns
+ * to SQLite and keeps what was typed; one being edited is left alone. X3
+ */
 export function openSqliteForm(): void {
   set(sqliteFormRequested, false)
-  openNewForm('sqlite')
+  const draft = read(formDraft)
+  if (!draft) openNewForm('sqlite')
+  else if (draft.ref === undefined) setEngine('sqlite')
 }
 
 export function sqliteFormWasRequested(): boolean {
@@ -115,13 +120,9 @@ function isServer(engine: Engine): engine is ServerEngine {
 export function setEngine(engine: Engine): void {
   update(formDraft, (draft) => {
     if (!draft) return draft
-    // A port still at the old server engine's default follows the engine.
-    const port =
-      isServer(draft.engine) &&
-      isServer(engine) &&
-      draft.port === String(DEFAULT_PORTS[draft.engine])
-        ? String(DEFAULT_PORTS[engine])
-        : draft.port
+    // A port still at the old engine's default follows the engine; SQLite has no port of its own.
+    const stale = !isServer(draft.engine) || draft.port === String(DEFAULT_PORTS[draft.engine])
+    const port = isServer(engine) && stale ? String(DEFAULT_PORTS[engine]) : draft.port
     // A draft persisted before SQLite joined the form has no path.
     const path = draft.path ?? ''
     return { ...draft, engine, port, path, notice: null }

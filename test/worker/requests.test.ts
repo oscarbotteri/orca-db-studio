@@ -286,6 +286,36 @@ describe('SQLite files saved by v0.2.0', () => {
     ])
     await second.deactivate()
   })
+
+  test('a connection saved while they are being migrated is kept', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const host = mockHost({ storage: { 'sqlite-files': [path] } })
+    const w = await mountWorker(worker, { host })
+
+    await Promise.all([
+      w.request('connections.list'),
+      w.request('connection.save', { form: PG_FORM }),
+      w.request('connections.list'),
+    ])
+
+    expect((await w.request('connections.list')).saved.map((c) => c.name)).toEqual([
+      'Shop DB',
+      'shop.db',
+    ])
+    await w.deactivate()
+  })
+
+  test('two connections saved at once are both kept', async () => {
+    const w = await mountWorker(worker, { host: mockHost() })
+
+    await Promise.all([
+      w.request('connection.save', { form: { ...PG_FORM, name: 'One' } }),
+      w.request('connection.save', { form: { ...PG_FORM, name: 'Two' } }),
+    ])
+
+    expect((await w.request('connections.list')).saved.map((c) => c.name)).toEqual(['One', 'Two'])
+    await w.deactivate()
+  })
 })
 
 describe('explorer.listObjects', () => {

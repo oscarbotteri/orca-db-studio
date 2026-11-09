@@ -36,6 +36,16 @@ function legacySqlite(path: string): StoredSqlite {
   return { id: path, name: basename(path), engine: 'sqlite', path }
 }
 
+let pending: Promise<unknown> = Promise.resolve()
+
+/** Registry reads and writes run one at a time, so no write is based on a stale read. */
+function exclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = pending.then(task)
+  pending = run.catch(() => undefined)
+  return run
+}
+
+/** Call only inside `exclusive`: it may write the registry while migrating. */
 async function stored(orca: OrcaWorkerApi): Promise<StoredConnection[]> {
   const value = await orca.storage.get(SAVED_KEY)
   const saved = Array.isArray(value) ? value.filter(isStored) : []
@@ -98,8 +108,12 @@ export function configOf(form: ConnectionForm): ConnectionConfig {
   return configOfClean(cleanForm(form))
 }
 
+function storedNow(orca: OrcaWorkerApi): Promise<StoredConnection[]> {
+  return exclusive(() => stored(orca))
+}
+
 export async function listSaved(orca: OrcaWorkerApi): Promise<ConnectionEntry[]> {
-  return (await stored(orca))
+  return (await storedNow(orca))
     .map(entryOf)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 }
@@ -108,12 +122,12 @@ export async function findSaved(
   orca: OrcaWorkerApi,
   ref: string,
 ): Promise<ConnectionConfig | undefined> {
-  const found = (await stored(orca)).find((c) => c.id === ref)
+  const found = (await storedNow(orca)).find((c) => c.id === ref)
   return found && configOf(formOf(found))
 }
 
 export async function getSaved(orca: OrcaWorkerApi, ref: string): Promise<SavedConnection> {
-  const found = (await stored(orca)).find((c) => c.id === ref)
+  const found = (await storedNow(orca)).find((c) => c.id === ref)
   if (!found) throw new Error(`No connection ${ref}`)
   return { form: formOf(found), hasPassword: (await orca.secrets.get(passwordKey(ref))) !== null }
 }
@@ -138,14 +152,28 @@ function refuseDuplicateFile(all: StoredConnection[], form: ConnectionForm, id: 
   if (other) throw new Error(`This file is already saved as ${other.name}`)
 }
 
+interface SaveInput {
+  ref?: string
+  form: ConnectionForm
+  password?: string
+}
+
 /**
  * Saves the form; the password goes to secrets first, so a refusal leaves nothing behind.
  * `check` runs on the cleaned form before anything is written.
  */
-export async function saveConnection(
+export function saveConnection(
   orca: OrcaWorkerApi,
-  input: { ref?: string; form: ConnectionForm; password?: string },
+  input: SaveInput,
   check: (config: ConnectionConfig) => Promise<void> = async () => undefined,
+): Promise<ConnectionEntry> {
+  return exclusive(() => save(orca, input, check))
+}
+
+async function save(
+  orca: OrcaWorkerApi,
+  input: SaveInput,
+  check: (config: ConnectionConfig) => Promise<void>,
 ): Promise<ConnectionEntry> {
   const form = cleanForm(input.form)
   const all = await stored(orca)
@@ -179,7 +207,11 @@ export async function saveConnection(
   return entryOf(next)
 }
 
-export async function deleteSaved(orca: OrcaWorkerApi, ref: string): Promise<void> {
+export function deleteSaved(orca: OrcaWorkerApi, ref: string): Promise<void> {
+  return exclusive(() => deleteStored(orca, ref))
+}
+
+async function deleteStored(orca: OrcaWorkerApi, ref: string): Promise<void> {
   const all = await stored(orca)
   if (!all.some((c) => c.id === ref)) throw new Error(`No connection ${ref}`)
   await orca.storage.set(

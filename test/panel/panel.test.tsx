@@ -214,6 +214,45 @@ describe('SQLite in the connection form', () => {
 
     expect(p.find({ label: 'Path' })).not.toBeNull()
   })
+
+  test('switching from SQLite to MySQL gives the MySQL port', async () => {
+    const { p } = await mountWith()
+
+    await p.post('sqlite.formRequested', {})
+    await p.select({ label: 'Engine' }, 'mysql')
+
+    expect(p.find({ label: 'Port' })?.props.value).toBe('3306')
+  })
+
+  test('the command turns a new form to SQLite, keeping what was typed', async () => {
+    const { p } = await mountWith()
+
+    await p.press({ label: 'New connection' })
+    await p.type({ label: 'Name' }, 'Mine')
+    await p.post('sqlite.formRequested', {})
+
+    expect(p.find({ label: 'Engine' })?.props.value).toBe('sqlite')
+    expect(p.find({ label: 'Name' })?.props.value).toBe('Mine')
+  })
+
+  test('the command leaves a connection being edited alone', async () => {
+    const PG_EDIT = {
+      name: 'Shop DB',
+      engine: 'postgres' as const,
+      host: 'db.internal',
+      port: 5432,
+      database: 'shop',
+      user: 'app',
+    }
+    const { p } = await mountWith({ 'connection.get': { form: PG_EDIT, hasPassword: true } })
+
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', SHOP.ref]))
+    await p.type({ label: 'Password' }, 'typed')
+    await p.post('sqlite.formRequested', {})
+
+    expect(p.find({ label: 'Host' })?.props.value).toBe('db.internal')
+    expect(p.find({ label: 'Password' })?.props.value).toBe('typed')
+  })
 })
 
 describe('opening a table', () => {
