@@ -2,18 +2,10 @@
 // API buffers whole results). Cancel runs KILL QUERY from a second connection; a timeout is the
 // server's own limit, so the server ends the query itself.
 import type { ConnectionOptions, FieldPacket } from 'mysql2'
+import type { ConnectionConfig, MysqlConfig } from '../common/config'
+import type { ColumnMeta, Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
+import type { SchemaTree } from '../common/schema'
 import { formatSize } from '../common/utils'
-import type {
-  ColumnMeta,
-  ConnectionConfig,
-  Driver,
-  MysqlConfig,
-  QueryCursor,
-  QueryOptions,
-  Row,
-  SchemaTree,
-  Session,
-} from '../common/types'
 
 type MysqlModule = typeof import('../../../vendor/mysql2.js')
 type MysqlConnection = ReturnType<MysqlModule['mysql']['createConnection']>

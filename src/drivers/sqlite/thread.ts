@@ -4,7 +4,8 @@ import { closeSync, openSync, readSync, statSync } from 'node:fs'
 import type { StatementSync } from 'node:sqlite'
 import { DatabaseSync } from 'node:sqlite'
 import { parentPort, workerData } from 'node:worker_threads'
-import type { ColumnMeta, Row, SchemaNode, SchemaTree } from '../common/types.ts'
+import type { ColumnMeta, Row } from '../common/driver.ts'
+import type { SchemaNode, SchemaTree } from '../common/schema.ts'
 
 export interface ThreadOps {
   open: { input: Record<string, never>; output: null }

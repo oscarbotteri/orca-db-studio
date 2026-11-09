@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/drivers/**/*.ts'],
-      exclude: ['src/drivers/**/*.d.ts', 'src/drivers/common/types.ts'],
+      exclude: ['src/drivers/**/*.d.ts', 'src/drivers/common/{config,driver,schema}.ts'],
       reporter: ['text', 'html'],
       reportsDirectory: 'coverage',
     },

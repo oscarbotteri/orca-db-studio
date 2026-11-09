@@ -1,5 +1,6 @@
 // Lazy driver registry: each engine is loaded on first use.
-import type { Driver, Engine } from './common/types'
+import type { Engine } from './common/config'
+import type { Driver } from './common/driver'
 
 const loaders: Record<Engine, () => Promise<Driver>> = {
   postgres: async () => (await import('./postgres/driver')).postgresDriver,

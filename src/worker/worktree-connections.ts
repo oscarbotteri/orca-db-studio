@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import { parseConnectionString } from '../connection-string'
-import type { ConnectionConfig } from '../drivers/common/types'
+import type { ConnectionConfig } from '../drivers/common/config'
 import type { ConnectionEntry } from '../protocol'
 import { listLocalWorkspaces } from './local-workspaces'
 

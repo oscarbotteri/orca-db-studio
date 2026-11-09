@@ -1,8 +1,8 @@
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import type { Session } from '../../src/drivers/common/driver'
 import { loadDriver } from '../../src/drivers/registry'
-import type { Session } from '../../src/drivers/common/types'
 import { driverContract } from './contract'
 
 const VERSIONS = ['postgres:13-alpine', 'postgres:latest']
