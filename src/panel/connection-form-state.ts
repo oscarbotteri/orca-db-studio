@@ -1,11 +1,14 @@
 // The connection form's draft and the worker requests behind its buttons. C1, C2, C3, X3
 import { atom, plugin, read, set, update } from 'orca'
 import { DEFAULT_PORTS, parseConnectionString } from '../connection-string'
+import { DEFAULT_TONE } from '../environment-label'
 import {
   type ConnectionForm,
+  type Environment,
   type FoundSqliteFile,
-  SQLITE_FORM_REQUEST_KEY,
   type ServerEngine,
+  SQLITE_FORM_REQUEST_KEY,
+  type Tone,
 } from '../protocol'
 import {
   collapse,
@@ -30,6 +33,9 @@ export interface FormDraft {
   database: string
   user: string
   path: string
+  /** `''` is no environment, which leaves the color disabled. */
+  environment: Environment | ''
+  tone: Tone
   /** The last test result or failure, shown beside the buttons. */
   notice: { tone: 'success' | 'danger'; text: string } | null
 }
@@ -64,6 +70,8 @@ function blankDraft(engine: Engine): FormDraft {
     database: '',
     user: '',
     path: '',
+    environment: '',
+    tone: 'neutral',
     notice: null,
   }
 }
@@ -93,11 +101,19 @@ export function sqliteFormWasRequested(): boolean {
 export async function openEditForm(ref: string): Promise<void> {
   set(editError, null)
   try {
-    const { form, hasPassword } = await plugin.request('connection.get', { ref })
-    const fields = form.engine === 'sqlite' ? { ...form } : { ...form, port: String(form.port) }
+    const { form: saved, hasPassword } = await plugin.request('connection.get', { ref })
+    const { label, ...form } = saved
+    const fields = form.engine === 'sqlite' ? form : { ...form, port: String(form.port) }
     set(formPassword, '')
     set(findingFiles, false)
-    set(formDraft, { ...blankDraft(form.engine), ...fields, ref, hasPassword, notice: null })
+    set(formDraft, {
+      ...blankDraft(form.engine),
+      ...fields,
+      ...(label ? { environment: label.environment, tone: label.tone } : {}),
+      ref,
+      hasPassword,
+      notice: null,
+    })
   } catch (error) {
     set(editError, errorMessage(error))
   }
@@ -129,6 +145,11 @@ export function setEngine(engine: Engine): void {
   })
 }
 
+/** The environment brings its default color; the person can pick another one after. */
+export function setEnvironment(environment: Environment | ''): void {
+  editDraft({ environment, tone: environment === '' ? 'neutral' : DEFAULT_TONE[environment] })
+}
+
 export function findInWorkspaces(): void {
   set(findingFiles, true)
   void loadFoundFiles()
@@ -155,9 +176,11 @@ export function pasteConnectionString(text: string): void {
 }
 
 function formOf(draft: FormDraft): ConnectionForm {
-  const { name, engine, host, port, database, user, path } = draft
-  if (!isServer(engine)) return { name, engine, path }
-  return { name, engine, host, port: Number(port), database, user }
+  const { name, engine, host, port, database, user, path, environment, tone } = draft
+  // A draft persisted before labels joined the form has neither field.
+  const label = environment ? { label: { environment, tone: tone ?? 'neutral' } } : {}
+  if (!isServer(engine)) return { name, engine, path, ...label }
+  return { name, engine, host, port: Number(port), database, user, ...label }
 }
 
 function input(draft: FormDraft) {

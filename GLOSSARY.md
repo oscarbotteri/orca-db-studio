@@ -12,6 +12,10 @@ _Avoid_: Dialect, database type, provider
 A saved, named way to reach one database, created by the person in DB Studio.
 _Avoid_: Datasource, profile, server
 
+**Environment label**:
+The `local` / `dev` / `staging` / `prod` tag a saved connection carries, shown with a color in every query document on it.
+_Avoid_: Environment tag, stage
+
 **Worktree connection**:
 A connection read from a worktree's `.env` each time it is used and never saved by DB Studio; the worktree's `.env` stays its only source.
 _Avoid_: Per-worktree connection, detected connection, env connection

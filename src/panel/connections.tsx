@@ -13,6 +13,7 @@ import {
   Tree,
   type TreeItem,
 } from 'orca'
+import { panelDescription } from '../environment-label'
 import type { ConnectionEntry, SchemaNode } from '../protocol'
 import { editError, openEditForm, openNewForm } from './connection-form-state'
 import {
@@ -64,7 +65,7 @@ function connectionItem(entry: ConnectionEntry): TreeItem {
   const item = {
     key: connectionKey(entry.ref),
     label: entry.name,
-    description: worktree ? `.env · ${entry.detail}` : entry.detail,
+    description: panelDescription(entry),
     icon: worktree ? ('branch' as const) : ('database' as const),
   }
   const state = read(objects)[entry.ref]

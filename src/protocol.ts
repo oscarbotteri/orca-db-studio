@@ -13,6 +13,18 @@ export type {
 /** Saved by the person in DB Studio, or read from a worktree's .env on every use. */
 export type ConnectionOrigin = 'saved' | 'worktree'
 
+/** What a saved connection points at, for the label every query document on it shows. */
+export type Environment = 'local' | 'dev' | 'staging' | 'prod'
+
+/** Orca's theme tones: the color a label is drawn in. */
+export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
+
+/** A saved connection's environment and the tone it is drawn in, both stored explicitly. */
+export interface EnvironmentLabel {
+  environment: Environment
+  tone: Tone
+}
+
 /** A connection as the panel lists it; `ref` is what a query document names. */
 export interface ConnectionEntry {
   ref: string
@@ -20,6 +32,8 @@ export interface ConnectionEntry {
   /** Where it points, short enough to sit beside the name. */
   detail: string
   origin: ConnectionOrigin
+  /** Saved connections only; a worktree connection has none. */
+  label?: EnvironmentLabel
 }
 
 export interface ConnectionList {
@@ -40,6 +54,7 @@ export interface ServerForm {
   port: number
   database: string
   user: string
+  label?: EnvironmentLabel
 }
 
 /** What the connection form edits for a SQLite file: an absolute path. */
@@ -47,6 +62,7 @@ export interface SqliteForm {
   name: string
   engine: 'sqlite'
   path: string
+  label?: EnvironmentLabel
 }
 
 export type ConnectionForm = ServerForm | SqliteForm
@@ -90,6 +106,12 @@ export interface CellValue {
   text: string | null
   cut: boolean
 }
+
+/**
+ * Storage key of the saved-connection registry. Named before SQLite files joined it; renaming it
+ * would lose every saved connection. Frames watch it to learn that a label changed.
+ */
+export const SAVED_CONNECTIONS_KEY = 'server-connections'
 
 /** Storage key the "Open SQLite File" command sets so the panel opens the form on SQLite. */
 export const SQLITE_FORM_REQUEST_KEY = 'sqlite-form-requested'

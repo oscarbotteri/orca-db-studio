@@ -1,5 +1,7 @@
 // The form to create, test, edit and delete a saved connection. C1, C2, C3
 import { Button, Callout, Card, Input, Row, read, Select, Stack, set } from 'orca'
+import { DEFAULT_TONE, ENVIRONMENTS, TONES } from '../environment-label'
+import type { Environment, Tone } from '../protocol'
 import {
   closeForm,
   deleteFromForm,
@@ -12,6 +14,7 @@ import {
   pasteConnectionString,
   saveForm,
   setEngine,
+  setEnvironment,
   testForm,
 } from './connection-form-state'
 import { SqliteFields } from './sqlite-fields'
@@ -21,6 +24,14 @@ const ENGINES = [
   { value: 'mysql', label: 'MySQL / MariaDB' },
   { value: 'sqlite', label: 'SQLite' },
 ]
+
+/** Orca's Select drops an empty value, so "no environment" is a word of its own here. */
+const NO_ENVIRONMENT = 'none'
+const ENVIRONMENT_OPTIONS = [
+  { value: NO_ENVIRONMENT, label: 'None' },
+  ...ENVIRONMENTS.map((value) => ({ value, label: value })),
+]
+const TONE_OPTIONS = TONES.map((value) => ({ value, label: value }))
 
 interface FormPartProps {
   draft: FormDraft
@@ -48,6 +59,28 @@ function ServerFields({ draft }: FormPartProps) {
   )
 }
 
+function EnvironmentFields({ draft }: FormPartProps) {
+  // A draft persisted before labels joined the form has neither field.
+  const environment = draft.environment ?? ''
+  return (
+    <>
+      <Select
+        label="Environment"
+        value={environment === '' ? NO_ENVIRONMENT : environment}
+        options={ENVIRONMENT_OPTIONS}
+        onChange={(value) => setEnvironment(value === NO_ENVIRONMENT ? '' : (value as Environment))}
+      />
+      <Select
+        label="Color"
+        value={environment === '' ? 'neutral' : (draft.tone ?? DEFAULT_TONE[environment])}
+        options={TONE_OPTIONS}
+        disabled={environment === ''}
+        onChange={(tone) => editDraft({ tone: tone as Tone })}
+      />
+    </>
+  )
+}
+
 function ConnectionFields({ draft }: FormPartProps) {
   return (
     <>
@@ -67,6 +100,7 @@ function ConnectionFields({ draft }: FormPartProps) {
         onChange={(value) => setEngine(value as Engine)}
       />
       {draft.engine === 'sqlite' ? <SqliteFields draft={draft} /> : <ServerFields draft={draft} />}
+      <EnvironmentFields draft={draft} />
     </>
   )
 }

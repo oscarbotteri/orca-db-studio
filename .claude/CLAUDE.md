@@ -6,7 +6,7 @@ Your role is to analyze user requirements, delegate tasks to appropriate sub-age
 
 ## Project Overview
 
-DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB and SQLite without leaving Orca. The current target is the MVP in `docs/PRD.md`. Build only requirements marked `MVP` unless the task says otherwise.
+DB Studio is an Orca plugin for browsing and querying PostgreSQL, MySQL/MariaDB and SQLite without leaving Orca.
 
 **Every database call goes through the worker** — UI code never touches a driver directly.
 
