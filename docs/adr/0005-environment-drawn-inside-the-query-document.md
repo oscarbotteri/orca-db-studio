@@ -25,5 +25,5 @@ Orca's plugin API offers no way to color, rename or decorate an editor tab, and 
 ## Consequences
 
 - The label is visible only once the document is open and focused; Orca's tab strip and the panel tree cannot carry a color. The panel marks the environment in the row's text instead.
-- Neither the event nor the storage change is confirmed to reach editor frames. If neither does, an edited label reaches an open document on reopen.
+- The manual tests of #55 confirmed that an open document follows a label edited in the panel without reopening. They did not tell the two signals apart, so the document listens to both. If Orca stops delivering both, an edited label reaches an open document on reopen.
 - Reopen if Orca lets plugins decorate editor tabs.
