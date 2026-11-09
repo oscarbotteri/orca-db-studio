@@ -8,12 +8,26 @@ export interface CompletionSchema {
   defaultSchema: string | undefined
 }
 
+/** A key set by definition: plain assignment cannot create `__proto__` and fails on read-only inherited ones. */
+function setKey<T>(target: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
+}
+
 export function completionSchema(tree: ColumnTree): CompletionSchema {
-  const schema: CompletionSchema['schema'] = {}
+  // Schema and table names come from the database: no prototype for them to collide with.
+  const schema: CompletionSchema['schema'] = Object.create(null)
   for (const table of tree.tables) {
-    const tables = schema[table.schema] ?? {}
-    tables[table.name] = table.columns
-    schema[table.schema] = tables
+    let tables = schema[table.schema]
+    if (!tables) {
+      tables = Object.create(null) as Record<string, string[]>
+      setKey(schema, table.schema, tables)
+    }
+    setKey(tables, table.name, table.columns)
   }
   return { schema, defaultSchema: tree.defaultSchema || undefined }
 }

@@ -59,6 +59,25 @@ describe('completionSchema', () => {
     ).toEqual({ schema: { shop: { items: ['id'] } }, defaultSchema: undefined })
   })
 
+  test('keeps names that collide with what every object inherits', () => {
+    const { schema } = completionSchema({
+      defaultSchema: 'public',
+      tables: [
+        { schema: 'constructor', name: 'name', columns: ['a'] },
+        { schema: 'toString', name: 'length', columns: ['b'] },
+        { schema: 'public', name: '__proto__', columns: ['c'] },
+        { schema: 'public', name: 'valueOf', columns: ['d'] },
+      ],
+    })
+    expect(Object.keys(schema)).toEqual(['constructor', 'toString', 'public'])
+    expect(Object.entries(schema.constructor ?? {})).toEqual([['name', ['a']]])
+    expect(Object.entries(schema.toString ?? {})).toEqual([['length', ['b']]])
+    expect(Object.entries(schema.public ?? {})).toEqual([
+      ['__proto__', ['c']],
+      ['valueOf', ['d']],
+    ])
+  })
+
   test('an empty database has nothing to complete but keeps its default schema', () => {
     expect(completionSchema({ defaultSchema: 'main', tables: [] })).toEqual({
       schema: {},

@@ -126,20 +126,27 @@ doc.onReplace((value) => editor.replace(value))
 
 /** Only the latest load may land: an earlier, slower one is stale by then. */
 let latestSchema = 0
+/** The connection the editor last loaded a schema for. */
+let loadedRef: string | undefined
 
 /** The editor already completes keywords, so a schema that cannot load changes nothing. */
-async function loadSchema(schemaRef: string, schemaDialect: SqlDialect): Promise<void> {
+async function loadSchema(schemaRef: string): Promise<void> {
   const mine = ++latestSchema
+  loadedRef = schemaRef
   try {
-    const tree = await orca.plugin.request('editor.schema', { ref: schemaRef })
-    if (mine === latestSchema) editor.setCompletion(schemaDialect, completionSchema(tree))
+    // The dialect comes with the schema: the line naming the connection may have been edited by hand.
+    const [info, tree] = await Promise.all([
+      orca.plugin.request('connection.info', { ref: schemaRef }),
+      orca.plugin.request('editor.schema', { ref: schemaRef }),
+    ])
+    if (mine === latestSchema) editor.setCompletion(info.dialect, completionSchema(tree))
   } catch {
     // A connection that fails is already reported by connection.info.
   }
 }
 
 function loadOpenSchema(): void {
-  if (ref !== undefined && dialect !== undefined) void loadSchema(ref, dialect)
+  if (ref !== undefined && dialect !== undefined) void loadSchema(ref)
 }
 
 let running = false
@@ -162,10 +169,9 @@ async function connect(chosen: string): Promise<void> {
   if (mine !== latestChoice) return
   // The line is written only for a connection that works, so the file never keeps a broken one.
   editor.change(connectionLineChange(editor.text(), chosen))
-  dialect = chosenDialect
   // The old connection's tables must not complete here while the new ones load.
   editor.setCompletion(chosenDialect, undefined)
-  void loadSchema(chosen, chosenDialect)
+  void loadSchema(chosen)
   chooser.element.hidden = true
   chooser.setNotice(undefined)
   result.replaceChildren()
@@ -218,8 +224,8 @@ async function execute(): Promise<void> {
       await orca.plugin.request('query.run', { ref, sql, documentId }),
       (row, column) => void fullValuePanel.show(row, column),
     )
-    // The tables the editor completes from are stale now.
-    if (dialect !== undefined && changesSchema(sql)) void loadSchema(ref, dialect)
+    // The tables the editor completes from are stale, or are another connection's.
+    if (ref !== loadedRef || changesSchema(sql)) void loadSchema(ref)
   } catch (error) {
     renderError(result, errorMessage(error))
   } finally {
