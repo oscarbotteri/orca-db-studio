@@ -21,7 +21,7 @@ The result: Orca users keep TablePlus, DBeaver or `psql` open on the side, and a
 1. **Look at a database without leaving Orca:** connect, see its tables, open one, run a query. This is the MVP.
 2. **One model for three engines:** same UI and features everywhere; engine differences stay inside the driver.
 3. **Per-worktree databases:** each worktree's own database, read from its `.env`, with nothing to configure.
-4. **Safe, visible agent access (v1):** Orca's agents query the database over MCP, read-only by default, and every query is logged.
+4. **Safe agent access (v1):** Orca's agents query the database over MCP, read-only by default. The activity log of what they ran follows in v2 (A4).
 5. **Publishable in the Orca plugin directory**, as a public project (`oscarbotteri/orca-db-studio`) once the MVP works.
 
 ## Non-goals (for now)

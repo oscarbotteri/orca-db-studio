@@ -98,11 +98,11 @@ A database client is only useful if you can trust it with a large table or a slo
 
 A few of the things planned after the [MVP](https://github.com/oscarbotteri/orca-db-studio/milestone/1). Each version links to its GitHub milestone; requirement IDs refer to [`docs/PRD.md`](docs/PRD.md).
 
-| Version                                                              | Highlights                                                                                                                                                                                                          |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[v1](https://github.com/oscarbotteri/orca-db-studio/milestone/2)** | Autocomplete from the live schema (`Q2`) · MCP server so agents can query read-only, with an activity log (`A1`, `A2`, `A4`) · copy results as CSV, JSON, Markdown or `INSERT` (`G4`) · schema page with DDL (`S1`) |
-| **[v2](https://github.com/oscarbotteri/orca-db-studio/milestone/3)** | Edit cells and rows as a draft with SQL preview (`D1`, `D2`) · agent writes with explicit approval (`A3`) · sort, filter and export from the grid (`G2`, `G5`) · virtualized grid (`G6`)                            |
-| **[v3](https://github.com/oscarbotteri/orca-db-studio/milestone/4)** | ER diagram (`S2`) · `EXPLAIN` visualizer (`S3`) · open `psql` / `mysql` in an Orca terminal (`X2`)                                                                                                                  |
+| Version                                                              | Highlights                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[v1](https://github.com/oscarbotteri/orca-db-studio/milestone/2)** | Autocomplete from the live schema (`Q2`) · MCP server so agents can query read-only (`A1`, `A2`) · copy results as CSV, JSON, Markdown or `INSERT` (`G4`) · schema page with DDL (`S1`)                                           |
+| **[v2](https://github.com/oscarbotteri/orca-db-studio/milestone/3)** | Edit cells and rows as a draft with SQL preview (`D1`, `D2`) · agent writes with explicit approval (`A3`) · activity log of what agents ran (`A4`) · sort, filter and export from the grid (`G2`, `G5`) · virtualized grid (`G6`) |
+| **[v3](https://github.com/oscarbotteri/orca-db-studio/milestone/4)** | ER diagram (`S2`) · `EXPLAIN` visualizer (`S3`) · open `psql` / `mysql` in an Orca terminal (`X2`)                                                                                                                                |
 
 ## Getting started
 

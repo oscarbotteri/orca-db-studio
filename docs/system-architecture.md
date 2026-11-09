@@ -176,18 +176,18 @@ orca plugin shot <key>      # PNG screenshot
 
 Design notes kept for later versions. They are not built in the MVP and may change when their version starts.
 
-**Agents over MCP (v1: A1, A2, A4)**
+**Agents over MCP (v1: A1, A2)**
 
 - A plain Node stdio MCP server with no dependencies, shipped in `mcp/`, talking to a loopback-only HTTP gateway in the worker.
 - `agent.launch.before` can only rewrite `command` and add `env` (64 variables, 2 s deadline), and its payload has `workspaceId` but no path or MCP field. Injection is an adapter per agent CLI: `claude` gets `--mcp-config`, `codex` gets `-c mcp_servers...`; other agents pass untouched.
 - The MCP server runs with the worker's `process.execPath` and `ELECTRON_RUN_AS_NODE=1`, so it does not need `node` on the person's `PATH`.
-- A token per agent launch, bound to `{workspaceId, agent}`, tells the gateway which agent and worktree sent each query: it picks the right worktree connection and records the origin.
+- A token per agent launch, bound to `{workspaceId, agent}`, tells the gateway which agent and worktree sent each query: it picks the right worktree connection.
 - A worker restart invalidates running agents' tokens; the agent gets a clear error. Restored sessions are not hooked.
 - Read-only is enforced by the database session (`BEGIN READ ONLY` / `START TRANSACTION READ ONLY` / read-only SQLite connection), one statement per agent call, and a snapshot taken before the agent's SQL in PostgreSQL. Bypass tests cover writes in CTEs and functions, multi-statement batches, `SET TRANSACTION READ WRITE` and `COMMIT; ...`. `dblink` and similar are only covered by a separate low-privilege agent credential.
 - `run_query` returns 100 rows by default and 1000 at most, truncates long values, and says when it cut anything off.
-- Activity log in a `node:sqlite` file under `$HOME`, since `storage:own` is too small; SQL and metadata only, never row data.
 
-**Writes and grid (v2: A3, D1, D2, G6)**
+**Activity log, writes and grid (v2: A3, A4, D1, D2, G6)**
 
+- Activity log in a `node:sqlite` file under `$HOME`, since `storage:own` is too small; SQL and metadata only, never row data. The token of each agent launch gives the origin (agent and worktree) of every entry.
 - On a `read-write` connection, an agent query first runs read-only; only a read-only violation from the database queues it for approval.
 - A paged, virtualized grid for large query results.
