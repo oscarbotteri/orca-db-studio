@@ -22,6 +22,7 @@ const SHOP_DB: ConnectionEntry = {
   name: 'Shop DB',
   detail: 'app@db.internal:5432/shop',
   origin: 'saved',
+  label: { environment: 'prod', tone: 'danger' },
 }
 
 const API_WORKTREE: ConnectionEntry = {
@@ -41,6 +42,8 @@ const FILLED_FORM: FormDraft = {
   database: 'shop',
   user: 'app',
   path: '',
+  environment: 'prod',
+  tone: 'danger',
   notice: null,
 }
 

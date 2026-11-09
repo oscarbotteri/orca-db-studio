@@ -519,3 +519,170 @@ describe('connection form', () => {
     })
   })
 })
+
+describe('environment label', () => {
+  const PROD_PG: ConnectionEntry = {
+    ref: 'c1',
+    name: 'Billing DB',
+    detail: 'app@db:5432/billing',
+    origin: 'saved',
+    label: { environment: 'prod', tone: 'danger' },
+  }
+  const FORM = {
+    name: 'Billing DB',
+    engine: 'postgres' as const,
+    host: 'db',
+    port: 5432,
+    database: 'billing',
+    user: 'app',
+  }
+
+  async function mountWith(requests: Record<string, unknown> = {}) {
+    const host = mockHost({
+      requests: {
+        'connections.list': { saved: [PROD_PG, SHOP], worktrees: [API] },
+        ...requests,
+      } as never,
+    })
+    return { host, p: await mount(panel, { host }) }
+  }
+
+  test('a connection row starts its description with the label', async () => {
+    const { p } = await mountWith()
+
+    expect(treeItems(p).map((item) => item.description)).toEqual([
+      'prod · app@db:5432/billing',
+      'data',
+      '.env · app@db:5432/shop',
+    ])
+  })
+
+  test('the form starts with no environment and a disabled color', async () => {
+    const { p } = await mountWith()
+
+    await p.press({ label: 'New connection' })
+
+    expect(p.find({ label: 'Environment' })?.props.value).toBe('none')
+    expect(p.find({ label: 'Color' })?.props.disabled).toBe(true)
+  })
+
+  test('choosing an environment enables the color and picks its default', async () => {
+    const { p } = await mountWith()
+    await p.press({ label: 'New connection' })
+
+    await p.select({ label: 'Environment' }, 'staging')
+
+    expect(p.find({ label: 'Color' })?.props.disabled).toBeFalsy()
+    expect(p.find({ label: 'Color' })?.props.value).toBe('warning')
+  })
+
+  test('changing the environment resets a color the person had picked', async () => {
+    const { p } = await mountWith()
+    await p.press({ label: 'New connection' })
+    await p.select({ label: 'Environment' }, 'dev')
+    await p.select({ label: 'Color' }, 'neutral')
+
+    await p.select({ label: 'Environment' }, 'prod')
+
+    expect(p.find({ label: 'Color' })?.props.value).toBe('danger')
+  })
+
+  test('the color offers Orca five tones', async () => {
+    const { p } = await mountWith()
+    await p.press({ label: 'New connection' })
+
+    const options = p.find({ label: 'Color' })?.props.options as { value: string }[]
+
+    expect(options.map((o) => o.value)).toEqual([
+      'neutral',
+      'accent',
+      'success',
+      'warning',
+      'danger',
+    ])
+  })
+
+  test('saves the environment and the chosen color with the connection', async () => {
+    let saved: unknown
+    const { p } = await mountWith({
+      'connection.save': (input: unknown) => {
+        saved = input
+        return PROD_PG
+      },
+    })
+
+    await p.press({ label: 'New connection' })
+    await p.type({ label: 'Connection string' }, 'postgres://app@db:5432/billing')
+    await p.type({ label: 'Name' }, 'Billing DB')
+    await p.select({ label: 'Environment' }, 'prod')
+    await p.select({ label: 'Color' }, 'warning')
+    await p.press({ text: 'Save' })
+
+    expect(saved).toMatchObject({
+      form: { name: 'Billing DB', label: { environment: 'prod', tone: 'warning' } },
+    })
+  })
+
+  test('editing restores the saved environment and color', async () => {
+    const { p } = await mountWith({
+      'connection.get': {
+        form: { ...FORM, label: { environment: 'dev', tone: 'neutral' } },
+        hasPassword: true,
+      },
+    })
+
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+
+    expect(p.find({ label: 'Environment' })?.props.value).toBe('dev')
+    expect(p.find({ label: 'Color' })?.props.value).toBe('neutral')
+  })
+
+  test('a connection saved before labels existed opens with no environment', async () => {
+    const { p } = await mountWith({ 'connection.get': { form: FORM, hasPassword: true } })
+
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+
+    expect(p.find({ label: 'Environment' })?.props.value).toBe('none')
+    expect(p.find({ label: 'Color' })?.props.disabled).toBe(true)
+  })
+
+  test('choosing None again removes the label from what is saved', async () => {
+    let saved: unknown
+    const { p } = await mountWith({
+      'connection.get': {
+        form: { ...FORM, label: { environment: 'prod', tone: 'danger' } },
+        hasPassword: true,
+      },
+      'connection.save': (input: unknown) => {
+        saved = input
+        return PROD_PG
+      },
+    })
+
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+    await p.select({ label: 'Environment' }, 'none')
+    await p.press({ text: 'Save' })
+
+    expect(saved).toEqual({ ref: 'c1', form: FORM })
+  })
+
+  test('a SQLite file can carry one too', async () => {
+    let saved: unknown
+    const { p } = await mountWith({
+      'connection.save': (input: unknown) => {
+        saved = input
+        return SHOP
+      },
+    })
+
+    await p.press({ label: 'New connection' })
+    await p.select({ label: 'Engine' }, 'sqlite')
+    await p.type({ label: 'Path' }, '/data/shop.db')
+    await p.select({ label: 'Environment' }, 'local')
+    await p.press({ text: 'Save' })
+
+    expect(saved).toMatchObject({
+      form: { engine: 'sqlite', label: { environment: 'local', tone: 'success' } },
+    })
+  })
+})

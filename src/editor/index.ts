@@ -2,6 +2,7 @@
 import type { ConnectionEntry, SqlDialect } from '../protocol'
 import { createConnectionChooser } from './connection-chooser'
 import { chooserState, connectionEntries } from './connection-state'
+import { BADGE_STYLE, createEnvironmentBadge } from './environment-badge'
 import { createFullValuePanel, errorMessage } from './full-value-panel'
 import { renderError, renderFullValue, renderGrid } from './grid'
 import { createSqlEditor } from './sql-editor'
@@ -64,7 +65,7 @@ if (!orca.document) throw new Error('This file runs as a custom editor')
 const doc = await orca.document.session()
 
 const style = document.createElement('style')
-style.textContent = STYLE + PALETTE_STYLE
+style.textContent = STYLE + PALETTE_STYLE + BADGE_STYLE
 document.head.append(style)
 
 const toolbar = div('toolbar')
@@ -75,11 +76,12 @@ hint.textContent = 'Runs the selection, or the statement under the cursor (Cmd/C
 const cancel = document.createElement('button')
 cancel.textContent = 'Cancel'
 cancel.hidden = true
-toolbar.append(run, cancel, hint)
+const environmentBadge = createEnvironmentBadge()
+toolbar.append(environmentBadge.badge, run, cancel, hint)
 const editorHost = div('editor')
 const result = div('result')
 const fullValueHost = div('fullvalue')
-document.body.append(toolbar, editorHost, result, fullValueHost)
+document.body.append(environmentBadge.band, toolbar, editorHost, result, fullValueHost)
 
 /** Names this document to the worker, which keeps its rows' full values under it (G3). */
 const documentId = crypto.randomUUID()
@@ -101,6 +103,12 @@ try {
 } catch {
   // Without the list the document's own line stands; connection.info below still checks it.
 }
+
+/** The band and badge follow the connection the document's first line names, as the registry has it now. */
+function showConnection(named: string | undefined): void {
+  environmentBadge.show(entries?.find((entry) => entry.ref === named))
+}
+
 const { needsChoice, notice } = chooserState(ref, entries, doc.readOnly)
 let dialect: SqlDialect | undefined
 let failure: string | undefined
@@ -117,10 +125,15 @@ const editor = createSqlEditor({
   text: doc.value,
   readOnly: doc.readOnly,
   dialect: dialect ?? 'sqlite',
-  onChange: (text) => doc.change(text),
+  onChange: (text) => {
+    doc.change(text)
+    // Choosing another connection writes its line, so the band and badge follow at once.
+    showConnection(connectionRef(text))
+  },
   onRun: () => void execute(),
 })
 doc.onReplace((value) => editor.replace(value))
+showConnection(ref)
 
 let running = false
 let connected = !needsChoice && failure === undefined
@@ -157,6 +170,20 @@ const chooser = createConnectionChooser(
 chooser.element.hidden = connected
 chooser.setNotice(notice)
 toolbar.after(chooser.element)
+
+/** A saved connection was edited or deleted in the panel: its label changes in this document too. */
+orca.plugin.on('connections.changed', () => void reloadEntries())
+
+async function reloadEntries(): Promise<void> {
+  try {
+    entries = connectionEntries(await orca.plugin.request('connections.list'))
+  } catch {
+    // The list this document already has still stands.
+    return
+  }
+  chooser.setEntries(entries)
+  showConnection(connectionRef(editor.text()))
+}
 
 async function execute(): Promise<void> {
   // Mod-Enter bypasses the disabled button; a second run would race the first.

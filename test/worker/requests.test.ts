@@ -1132,3 +1132,59 @@ describe('query.cancel and the query timeout', () => {
     await settled
   })
 })
+
+describe('environment label', () => {
+  const label = { environment: 'prod', tone: 'danger' } as const
+
+  test('is saved with the connection, listed, and restored for editing', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await start()
+
+    const saved = await w.request('connection.save', {
+      form: { ...sqliteForm(path, 'Shop'), label },
+    })
+
+    expect(saved.label).toEqual(label)
+    expect((await w.request('connections.list')).saved[0]?.label).toEqual(label)
+    expect((await w.request('connection.get', { ref: saved.ref })).form).toMatchObject({ label })
+  })
+
+  test('a connection saved without one has none, and a label can be removed again', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await start()
+    const { ref } = await w.request('connection.save', {
+      form: { ...sqliteForm(path, 'Shop'), label },
+    })
+
+    const plain = await w.request('connection.save', { ref, form: sqliteForm(path, 'Shop') })
+
+    expect(plain).not.toHaveProperty('label')
+    expect((await w.request('connection.get', { ref })).form).not.toHaveProperty('label')
+  })
+
+  test('refuses an environment or tone it does not know', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await start()
+    const bad = { environment: 'qa', tone: 'danger' } as never
+
+    await expect(
+      w.request('connection.save', { form: { ...sqliteForm(path), label: bad } }),
+    ).rejects.toThrow('Choose an environment')
+    await expect(
+      w.request('connection.save', {
+        form: { ...sqliteForm(path), label: { environment: 'prod', tone: 'pink' } as never },
+      }),
+    ).rejects.toThrow('Choose a color')
+    expect((await w.request('connections.list')).saved).toEqual([])
+  })
+
+  test('a connection stored before labels existed lists with none', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await start()
+    const { ref } = await w.request('connection.save', { form: sqliteForm(path, 'Shop') })
+
+    expect((await w.request('connections.list')).saved).toEqual([
+      { ref, name: 'Shop', detail: basename(root), origin: 'saved' },
+    ])
+  })
+})

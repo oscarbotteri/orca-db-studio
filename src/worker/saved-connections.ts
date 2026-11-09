@@ -2,7 +2,15 @@
 import { basename, dirname, isAbsolute, normalize } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { ConnectionConfig } from '../drivers'
-import type { ConnectionEntry, ConnectionForm, SavedConnection, ServerForm } from '../protocol'
+import { ENVIRONMENTS, TONES } from '../environment-label'
+import type {
+  ConnectionEntry,
+  ConnectionForm,
+  Environment,
+  SavedConnection,
+  ServerForm,
+  Tone,
+} from '../protocol'
 
 /** Named before SQLite files joined the registry; renaming it would lose every saved connection. */
 const SAVED_KEY = 'server-connections'
@@ -10,6 +18,7 @@ const SAVED_KEY = 'server-connections'
 const LEGACY_SQLITE_KEY = 'sqlite-files'
 
 /** Type aliases, not interfaces, so storage accepts them as JSON. */
+type StoredLabel = { environment: Environment; tone: Tone }
 type StoredServer = {
   id: string
   name: string
@@ -18,8 +27,15 @@ type StoredServer = {
   port: number
   database: string
   user: string
+  label?: StoredLabel
 }
-type StoredSqlite = { id: string; name: string; engine: 'sqlite'; path: string }
+type StoredSqlite = {
+  id: string
+  name: string
+  engine: 'sqlite'
+  path: string
+  label?: StoredLabel
+}
 type StoredConnection = StoredServer | StoredSqlite
 
 function isStored(value: unknown): value is StoredConnection {
@@ -65,17 +81,27 @@ function passwordKey(id: string): string {
 }
 
 function entryOf(connection: StoredConnection): ConnectionEntry {
-  const { id: ref, name } = connection
+  const { id: ref, name, label } = connection
+  const extra = label ? { label } : {}
   if (connection.engine === 'sqlite') {
     // The folder, not the whole path: a narrow panel would cut the file name off.
-    return { ref, name, detail: basename(dirname(connection.path)), origin: 'saved' }
+    return { ref, name, detail: basename(dirname(connection.path)), origin: 'saved', ...extra }
   }
   const { user, host, port, database } = connection
-  return { ref, name, detail: `${user}@${host}:${port}/${database}`, origin: 'saved' }
+  return { ref, name, detail: `${user}@${host}:${port}/${database}`, origin: 'saved', ...extra }
 }
 
 function formOf({ id: _id, ...form }: StoredConnection): ConnectionForm {
   return form
+}
+
+/** The label as sent, or nothing; a value the form does not offer is refused, not stored. */
+function cleanLabel(form: ConnectionForm): { label?: StoredLabel } {
+  if (!form.label) return {}
+  const { environment, tone } = form.label
+  if (!ENVIRONMENTS.includes(environment)) throw new Error('Choose an environment')
+  if (!TONES.includes(tone)) throw new Error('Choose a color')
+  return { label: { environment, tone } }
 }
 
 /**
@@ -84,10 +110,11 @@ function formOf({ id: _id, ...form }: StoredConnection): ConnectionForm {
  */
 function cleanForm(form: ConnectionForm): ConnectionForm {
   const name = form.name.trim()
+  const label = cleanLabel(form)
   if (form.engine === 'sqlite') {
     const path = form.path.trim()
     if (!isAbsolute(path)) throw new Error('Enter an absolute path to a SQLite file')
-    return { name: name || basename(path), engine: 'sqlite', path: normalize(path) }
+    return { name: name || basename(path), engine: 'sqlite', path: normalize(path), ...label }
   }
   if (!name) throw new Error('Enter a name for the connection')
   const host = form.host.trim()
@@ -95,7 +122,8 @@ function cleanForm(form: ConnectionForm): ConnectionForm {
   if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) {
     throw new Error('Enter a port between 1 and 65535')
   }
-  return { ...form, name, host, database: form.database.trim(), user: form.user.trim() }
+  const { label: _sent, ...server } = form
+  return { ...server, name, host, database: form.database.trim(), user: form.user.trim(), ...label }
 }
 
 function configOfClean(form: ConnectionForm): ConnectionConfig {
