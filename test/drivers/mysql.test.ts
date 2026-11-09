@@ -3,7 +3,7 @@ import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysq
 import { type Connection, createConnection, type RowDataPacket } from 'mysql2/promise'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { loadDriver } from '../../src/drivers/registry'
-import type { Session } from '../../src/drivers/types'
+import type { Session } from '../../src/drivers/common/types'
 import { driverContract } from './contract'
 
 interface Flavour {

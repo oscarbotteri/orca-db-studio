@@ -1,7 +1,7 @@
 // Typed UI <-> worker contract, imported by both sides.
-import type { SchemaTree, SqlDialect } from './drivers/types'
+import type { SchemaTree, SqlDialect } from './drivers/common/types'
 
-export type { DbObject, SchemaNode, SchemaTree, SqlDialect } from './drivers/types'
+export type { DbObject, SchemaNode, SchemaTree, SqlDialect } from './drivers/common/types'
 
 /** A connection as the panel lists it; `ref` is what a query document names. */
 export interface ConnectionEntry {

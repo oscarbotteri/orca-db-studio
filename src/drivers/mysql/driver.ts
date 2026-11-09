@@ -2,7 +2,7 @@
 // API buffers whole results). Cancel runs KILL QUERY from a second connection; a timeout is the
 // server's own limit, so the server ends the query itself.
 import type { ConnectionOptions, FieldPacket } from 'mysql2'
-import { formatSize } from './format-size'
+import { formatSize } from '../common/utils'
 import type {
   ColumnMeta,
   ConnectionConfig,
@@ -13,9 +13,9 @@ import type {
   Row,
   SchemaTree,
   Session,
-} from './types'
+} from '../common/types'
 
-type MysqlModule = typeof import('../../vendor/mysql2.js')
+type MysqlModule = typeof import('../../../vendor/mysql2.js')
 type MysqlConnection = ReturnType<MysqlModule['mysql']['createConnection']>
 
 /** Rows held back from the socket before it is paused, so a large result never piles up in memory. */
@@ -279,7 +279,7 @@ function connectionOptions(config: MysqlConfig, secret: string | undefined): Con
 export const mysqlDriver: Driver = {
   async connect(config: ConnectionConfig, secret: string | undefined): Promise<Session> {
     if (config.engine !== 'mysql') throw new Error(`Not a MySQL connection: ${config.engine}`)
-    const { mysql } = await import('../../vendor/mysql2.js')
+    const { mysql } = await import('../../../vendor/mysql2.js')
     const options = connectionOptions(config, secret)
     const connection = await connectTo(mysql, options)
     try {

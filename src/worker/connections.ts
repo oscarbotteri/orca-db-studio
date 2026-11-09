@@ -2,7 +2,7 @@
 import { basename, dirname, isAbsolute, normalize } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import { loadDriver } from '../drivers/registry'
-import type { ConnectionConfig, SchemaTree, Session, SqlDialect } from '../drivers/types'
+import type { ConnectionConfig, SchemaTree, Session, SqlDialect } from '../drivers/common/types'
 import type {
   CellValue,
   ConnectionEntry,

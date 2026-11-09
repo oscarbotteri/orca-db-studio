@@ -114,7 +114,7 @@ Engine notes:
   - A connection runs one statement at a time, and an open cursor holds it until closed. Read anything the session needs (type names) at connect: a lookup issued after `query()` waits behind the cursor and never returns.
   - `cursor.close()` on a cursor that already finished or failed waits forever, so the driver tracks both states and skips it.
   - `statement_timeout` is the server's own limit and restarts on every batch read (each is a separate Execute), so it bounds each batch, not the whole stream. The row limit and result ceiling bound the stream.
-  - The cursor's describe step is reached through pg-cursor's internal hooks (`submit`, `handleRowDescription`, `handleError`), patched by name in `src/drivers/postgres.ts`. After a `pg` or `pg-cursor` bump, run `npm run test:drivers`.
+  - The cursor's describe step is reached through pg-cursor's internal hooks (`submit`, `handleRowDescription`, `handleError`), patched by name in `src/drivers/postgres/driver.ts`. After a `pg` or `pg-cursor` bump, run `npm run test:drivers`.
 - **MySQL/MariaDB:** `mysql2` row streaming through its callback API (the promise API buffers), with `multipleStatements` off and `supportBigNumbers`/`bigNumberStrings` on; cancel via `KILL QUERY` from a second connection.
   - A result's columns arrive with its first rows, so `query()` resolves only once the server has started answering; cancel works while it is still pending.
   - The server's timeout is `max_execution_time` on MySQL, which limits `SELECT` only, and `max_statement_time` on MariaDB, which limits any statement. Like Postgres, it is the server that ends the query.
@@ -149,7 +149,7 @@ Findings from the pinned Orca source and the 1.4.251 app; they shape the design 
 | `orca-plugin.json`   | Manifest: worker, panel, query document editor, commands, settings          |
 | `src/protocol.ts`    | Typed UI ↔ worker contract                                                  |
 | `src/worker/`        | Worker entry, connections, query engine, documents                          |
-| `src/drivers/`       | `postgres.ts`, `mysql.ts`, `sqlite.ts` + shared interface and lazy registry |
+| `src/drivers/`       | One folder per engine (`postgres/`, `mysql/`, `sqlite/`), `common/` + lazy registry |
 | `src/editor/`        | Query document editor: SQL editor, grid                                     |
 | `src/panel/`         | Connections and explorer                                                    |
 | `build/` → `vendor/` | Driver and editor bundles, license notices                                  |

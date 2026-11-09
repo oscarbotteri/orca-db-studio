@@ -12,7 +12,7 @@ Status: accepted
 
 ## Decision
 
-- `src/drivers/sqlite-thread.ts` is loaded with `new Worker(new URL('./sqlite-thread.ts', import.meta.url))` and Node's own type stripping. It uses erasable syntax only, and its only local imports are type-only ones with a `.ts` extension, so nothing in it depends on Orca's loader. It is not bundled into `vendor/`.
+- `src/drivers/sqlite/thread.ts` is loaded with `new Worker(new URL('./thread.ts', import.meta.url))` and Node's own type stripping. It uses erasable syntax only, and its only local imports are type-only ones with a `.ts` extension, so nothing in it depends on Orca's loader. It is not bundled into `vendor/`.
 - Cancel rejects the running call at once, terminates the thread without waiting for it, and the session starts a fresh thread on its next call.
 
 ## Consequences

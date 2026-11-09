@@ -3,10 +3,17 @@
 // node:sqlite has no interrupt: a thread stops once SQLite returns to JavaScript (the next row),
 // so cancel answers at once and never waits for the thread to exit.
 import { Worker } from 'node:worker_threads'
-import type { ThreadOp, ThreadOps, ThreadReply } from './sqlite-thread'
-import type { ConnectionConfig, Driver, QueryCursor, QueryOptions, Row, Session } from './types'
+import type { ThreadOp, ThreadOps, ThreadReply } from './thread'
+import type {
+  ConnectionConfig,
+  Driver,
+  QueryCursor,
+  QueryOptions,
+  Row,
+  Session,
+} from '../common/types'
 
-const THREAD_URL = new URL('./sqlite-thread.ts', import.meta.url)
+const THREAD_URL = new URL('./thread.ts', import.meta.url)
 
 interface Thread {
   call<K extends ThreadOp>(op: K, input: ThreadOps[K]['input']): Promise<ThreadOps[K]['output']>
