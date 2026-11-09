@@ -96,23 +96,31 @@ function listObjects(): SchemaTree {
   return { schemas }
 }
 
+function columnsOf(schema: string, table: string): string[] | undefined {
+  try {
+    return database()
+      .prepare('SELECT name FROM pragma_table_info(?, ?) ORDER BY cid')
+      .all(table, schema)
+      .map((row) => String(row.name))
+  } catch {
+    // A view over a dropped table fails here; it would take every other table's columns with it.
+    return undefined
+  }
+}
+
 function listColumns(): ColumnTree {
   const tables: TableColumns[] = []
   for (const { name } of database().prepare('PRAGMA database_list').all()) {
     const schema = String(name)
-    const rows = database()
+    const objects = database()
       .prepare(
-        `SELECT m.name AS tbl, p.name AS col FROM ${quoteIdent(schema)}.sqlite_schema m
-         JOIN pragma_table_info(m.name, ?) p
-        WHERE m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%'
-        ORDER BY m.name, p.cid`,
+        `SELECT name FROM ${quoteIdent(schema)}.sqlite_schema
+         WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name`,
       )
-      .all(schema)
-    for (const row of rows) {
-      const last = tables.at(-1)
-      if (last && last.schema === schema && last.name === row.tbl)
-        last.columns.push(String(row.col))
-      else tables.push({ schema, name: String(row.tbl), columns: [String(row.col)] })
+      .all()
+    for (const { name: table } of objects) {
+      const columns = columnsOf(schema, String(table))
+      if (columns?.length) tables.push({ schema, name: String(table), columns })
     }
   }
   return { defaultSchema: 'main', tables }

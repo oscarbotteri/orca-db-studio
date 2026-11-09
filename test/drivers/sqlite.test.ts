@@ -58,6 +58,24 @@ describe('SQLite driver', () => {
     }
   })
 
+  test('lists the columns of the healthy tables when a view is broken', async () => {
+    const path = newDatabase()
+    const db = new DatabaseSync(path)
+    db.exec(
+      'CREATE TABLE gone (id INTEGER); CREATE TABLE ok (a INTEGER, b TEXT); CREATE VIEW broken AS SELECT id FROM gone; DROP TABLE gone',
+    )
+    db.close()
+    const driver = await loadDriver('sqlite')
+    const session = await driver.connect({ engine: 'sqlite', path }, undefined)
+    try {
+      expect((await session.listColumns()).tables).toEqual([
+        { schema: 'main', name: 'ok', columns: ['a', 'b'] },
+      ])
+    } finally {
+      await session.close()
+    }
+  })
+
   test('refuses a file that is not a SQLite database', async () => {
     const path = join(dir, 'notes.db')
     await writeFile(path, 'just some text, not a database')
