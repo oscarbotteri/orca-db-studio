@@ -32,14 +32,14 @@
     },
     {
       "path": "docs/assets/screenshots/panel-dark.png",
-      "alt": "The DB Studio panel listing the tables and views of a PostgreSQL connection, in Orca's dark theme",
-      "caption": "Browse the tables and views of a connection",
+      "alt": "The DB Studio panel listing saved and worktree connections in one list, with the tables and views of a SQLite file expanded, in Orca's dark theme",
+      "caption": "Every connection in one list: servers, SQLite files and worktrees",
       "theme": "dark"
     },
     {
       "path": "docs/assets/screenshots/panel-light.png",
-      "alt": "The DB Studio panel listing the tables and views of a PostgreSQL connection, in Orca's light theme",
-      "caption": "Browse the tables and views of a connection",
+      "alt": "The DB Studio panel listing saved and worktree connections in one list, with the tables and views of a SQLite file expanded, in Orca's light theme",
+      "caption": "Every connection in one list: servers, SQLite files and worktrees",
       "theme": "light"
     }
   ],
