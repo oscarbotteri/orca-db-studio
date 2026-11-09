@@ -2,8 +2,8 @@ import { MariaDbContainer, type StartedMariaDbContainer } from '@testcontainers/
 import { MySqlContainer, type StartedMySqlContainer } from '@testcontainers/mysql'
 import { type Connection, createConnection, type RowDataPacket } from 'mysql2/promise'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import type { Session } from '../../src/drivers/common/driver'
-import { loadDriver } from '../../src/drivers/registry'
+import type { Session } from '../../src/drivers'
+import { loadDriver } from '../../src/drivers'
 import { driverContract } from './contract'
 
 interface Flavour {

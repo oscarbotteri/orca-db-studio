@@ -149,7 +149,7 @@ Findings from the pinned Orca source and the 1.4.251 app; they shape the design 
 | `orca-plugin.json`   | Manifest: worker, panel, query document editor, commands, settings          |
 | `src/protocol.ts`    | Typed UI ↔ worker contract                                                  |
 | `src/worker/`        | Worker entry, connections, query engine, documents                          |
-| `src/drivers/`       | One folder per engine (`postgres/`, `mysql/`, `sqlite/`), `common/` + lazy registry |
+| `src/drivers/`       | One folder per engine (`postgres/`, `mysql/`, `sqlite/`), `common/` (seam types), `index.ts` (the only import path, lazy registry) |
 | `src/editor/`        | Query document editor: SQL editor, grid                                     |
 | `src/panel/`         | Connections and explorer                                                    |
 | `build/` → `vendor/` | Driver and editor bundles, license notices                                  |

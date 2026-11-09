@@ -1,6 +1,6 @@
 // Saved server connections: the registry in storage:own, each password in secrets:own. C1
 import type { OrcaWorkerApi } from 'orca/worker'
-import type { ConnectionConfig } from '../drivers/common/config'
+import type { ConnectionConfig } from '../drivers'
 import type { ConnectionEntry, ConnectionForm, SavedConnection, ServerEngine } from '../protocol'
 
 const SERVERS_KEY = 'server-connections'

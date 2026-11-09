@@ -1,6 +1,6 @@
 // Seam A: the driver contract, written once against the driver interface and run on every engine.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import type { Row, Session } from '../../src/drivers/common/driver'
+import type { Row, Session } from '../../src/drivers'
 
 export interface ContractTarget {
   /** A session on an empty database. */

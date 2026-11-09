@@ -1,8 +1,8 @@
 // Runs a statement through the driver interface: cursor up to the row limit, cancel, timeout, and
 // the full values of the rows it returned. Q3, G1, G3
 import { randomUUID } from 'node:crypto'
-import type { QueryOptions, Session } from '../drivers/common/driver'
-import { formatSize } from '../drivers/common/utils'
+import type { QueryOptions, Session } from '../drivers'
+import { formatSize } from '../drivers'
 import type { CellValue, QueryResult } from '../protocol'
 import { hasOwnLimit } from './own-limit'
 

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import { loadDriver } from '../../src/drivers/registry'
+import { loadDriver } from '../../src/drivers'
 import { driverContract } from './contract'
 
 // Counts to 100 million: several seconds of work in SQLite before the one row comes back.
