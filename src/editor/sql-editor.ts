@@ -22,6 +22,7 @@ import {
   sql,
 } from '../../vendor/codemirror.js'
 import type { SqlDialect } from '../protocol'
+import { columnCompletion } from './column-completion'
 import type { CompletionSchema } from './sql-schema'
 import { sqlTheme } from './sql-theme'
 import type { TextChange } from './statements'
@@ -50,8 +51,12 @@ export interface SqlEditor {
   setCompletion(dialect: SqlDialect, schema: CompletionSchema | undefined): void
 }
 
-function language(dialect: SqlDialect, schema: CompletionSchema | undefined): Extension {
-  return sql({ dialect: DIALECTS[dialect], ...schema })
+/** The SQL language, and with a schema also the columns of the tables a statement reads from. */
+export function language(dialect: SqlDialect, schema: CompletionSchema | undefined): Extension {
+  const sqlLanguage = sql({ dialect: DIALECTS[dialect], ...schema })
+  if (!schema) return sqlLanguage
+  const columns = columnCompletion(schema)
+  return [sqlLanguage, EditorState.languageData.of(() => [{ autocomplete: columns }])]
 }
 
 function extensions(options: SqlEditorOptions, sqlLanguage: Compartment): Extension[] {

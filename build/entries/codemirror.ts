@@ -1,5 +1,5 @@
 // Editor frame bundle: CodeMirror 6 with the SQL dialects (ADR 0001).
-export { autocompletion, completionKeymap } from '@codemirror/autocomplete'
+export { autocompletion, type CompletionSource, completionKeymap } from '@codemirror/autocomplete'
 export { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 export {
   MariaSQL,
