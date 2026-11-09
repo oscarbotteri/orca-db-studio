@@ -94,6 +94,7 @@ interface Driver {
 
 interface Session {
   listObjects(): Promise<SchemaTree> // databases, schemas, tables, views
+  listColumns(): Promise<ColumnTree> // every table and view with its columns, and the default schema
   query(sql: string, opts: QueryOptions): Promise<QueryCursor>
   cancel(queryId: string): Promise<void>
   quoteIdent(name: string): string

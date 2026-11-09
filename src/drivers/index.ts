@@ -18,7 +18,13 @@ export type {
   Row,
   Session,
 } from './common/driver'
-export type { DbObject, SchemaNode, SchemaTree } from './common/schema'
+export type {
+  ColumnTree,
+  DbObject,
+  SchemaNode,
+  SchemaTree,
+  TableColumns,
+} from './common/schema'
 export { formatSize } from './common/utils'
 
 const loaders: Record<Engine, () => Promise<Driver>> = {

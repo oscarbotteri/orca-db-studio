@@ -99,3 +99,11 @@ const TABLE_QUERY = new RegExp(
 export function isTableQuery(text: string): boolean {
   return TABLE_QUERY.test(text)
 }
+
+const LEADING_NOISE = /^(?:\s+|--[^\n]*|\/\*[\s\S]*?(?:\*\/|$))*/
+const SCHEMA_CHANGE = /^(?:create|alter|drop|rename)\b/i
+
+/** Whether a statement adds, changes or removes tables, so the editor's schema is stale after it. */
+export function changesSchema(sql: string): boolean {
+  return SCHEMA_CHANGE.test(sql.replace(LEADING_NOISE, ''))
+}

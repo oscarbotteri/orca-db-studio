@@ -1,6 +1,6 @@
 // Connection registry (storage:own), passwords (secrets:own), worktree connections from .env. C1-C4
 import type { OrcaWorkerApi } from 'orca/worker'
-import type { ConnectionConfig, SchemaTree, Session, SqlDialect } from '../drivers'
+import type { ColumnTree, ConnectionConfig, SchemaTree, Session, SqlDialect } from '../drivers'
 import { loadDriver } from '../drivers'
 import type {
   CellValue,
@@ -11,6 +11,7 @@ import type {
   SavedConnection,
 } from '../protocol'
 import { createQueryEngine, type RunOptions } from './query-engine'
+import { fitToBudget } from './schema-budget'
 import {
   configOf,
   deleteSaved,
@@ -29,6 +30,7 @@ export interface Connections {
   get(ref: string): Promise<SavedConnection>
   delete(ref: string): Promise<void>
   listObjects(ref: string): Promise<SchemaTree>
+  listColumns(ref: string): Promise<ColumnTree>
   dialect(ref: string): Promise<SqlDialect>
   quoteIdent(ref: string, name: string): Promise<string>
   runQuery(ref: string, sql: string, options: RunOptions): Promise<QueryResult>
@@ -136,6 +138,9 @@ export function createConnections(orca: OrcaWorkerApi): Connections {
     },
     async listObjects(ref) {
       return (await sessionFor(ref)).listObjects()
+    },
+    async listColumns(ref) {
+      return fitToBudget(await (await sessionFor(ref)).listColumns())
     },
     async dialect(ref) {
       return (await sessionFor(ref)).dialect

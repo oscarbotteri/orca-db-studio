@@ -5,11 +5,12 @@ import type { StatementSync } from 'node:sqlite'
 import { DatabaseSync } from 'node:sqlite'
 import { parentPort, workerData } from 'node:worker_threads'
 import type { ColumnMeta, Row } from '../common/driver.ts'
-import type { SchemaNode, SchemaTree } from '../common/schema.ts'
+import type { ColumnTree, SchemaNode, SchemaTree, TableColumns } from '../common/schema.ts'
 
 export interface ThreadOps {
   open: { input: Record<string, never>; output: null }
   listObjects: { input: Record<string, never>; output: SchemaTree }
+  listColumns: { input: Record<string, never>; output: ColumnTree }
   query: {
     input: { sql: string }
     output: {
@@ -95,6 +96,28 @@ function listObjects(): SchemaTree {
   return { schemas }
 }
 
+function listColumns(): ColumnTree {
+  const tables: TableColumns[] = []
+  for (const { name } of database().prepare('PRAGMA database_list').all()) {
+    const schema = String(name)
+    const rows = database()
+      .prepare(
+        `SELECT m.name AS tbl, p.name AS col FROM ${quoteIdent(schema)}.sqlite_schema m
+         JOIN pragma_table_info(m.name, ?) p
+        WHERE m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%'
+        ORDER BY m.name, p.cid`,
+      )
+      .all(schema)
+    for (const row of rows) {
+      const last = tables.at(-1)
+      if (last && last.schema === schema && last.name === row.tbl)
+        last.columns.push(String(row.col))
+      else tables.push({ schema, name: String(row.tbl), columns: [String(row.col)] })
+    }
+  }
+  return { defaultSchema: 'main', tables }
+}
+
 function query(sql: string): ThreadOps['query']['output'] {
   const statement: StatementSync = database().prepare(sql)
   const columns = statement.columns().map((c) => ({ name: c.name, type: c.type ?? '' }))
@@ -146,6 +169,8 @@ function handle(op: ThreadOp, input: unknown): unknown {
       return null
     case 'listObjects':
       return listObjects()
+    case 'listColumns':
+      return listColumns()
     case 'query':
       return query((input as ThreadOps['query']['input']).sql)
     case 'fetch': {

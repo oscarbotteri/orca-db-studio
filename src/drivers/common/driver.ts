@@ -1,6 +1,6 @@
 // Driver, Session and Cursor interfaces. Code outside src/drivers never branches on engine.
 import type { ConnectionConfig, SqlDialect } from './config'
-import type { SchemaTree } from './schema'
+import type { ColumnTree, SchemaTree } from './schema'
 
 export interface Driver {
   connect(config: ConnectionConfig, secret: string | undefined): Promise<Session>
@@ -22,6 +22,7 @@ export type Row = unknown[]
 export interface Session {
   readonly dialect: SqlDialect
   listObjects(): Promise<SchemaTree>
+  listColumns(): Promise<ColumnTree>
   query(sql: string, opts: QueryOptions): Promise<QueryCursor>
   cancel(queryId: string): Promise<void>
   quoteIdent(name: string): string

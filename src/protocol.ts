@@ -1,7 +1,14 @@
 // Typed UI <-> worker contract, imported by both sides.
-import type { SchemaTree, SqlDialect } from './drivers'
+import type { ColumnTree, SchemaTree, SqlDialect } from './drivers'
 
-export type { DbObject, SchemaNode, SchemaTree, SqlDialect } from './drivers'
+export type {
+  ColumnTree,
+  DbObject,
+  SchemaNode,
+  SchemaTree,
+  SqlDialect,
+  TableColumns,
+} from './drivers'
 
 /** Saved by the person in DB Studio, or read from a worktree's .env on every use. */
 export type ConnectionOrigin = 'saved' | 'worktree'
@@ -105,6 +112,8 @@ declare module 'orca' {
     /** A SQLite file is only forgotten; it is never touched on disk. */
     'connection.delete': { input: { ref: string }; output: Record<string, never> }
     'explorer.listObjects': { input: { ref: string }; output: SchemaTree }
+    /** Every table and view with its columns, for the editor's completion. */
+    'editor.schema': { input: { ref: string }; output: ColumnTree }
     /** Without `workspaceId` the worker picks the focused workspace or asks to choose one. */
     'table.open': {
       input: { ref: string; schema: string; table: string; workspaceId?: string }

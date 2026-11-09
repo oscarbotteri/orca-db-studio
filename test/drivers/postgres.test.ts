@@ -74,6 +74,19 @@ for (const image of VERSIONS) {
         expect(session.dialect).toBe('postgres')
       })
 
+      test('lists the columns of tables in other schemas, not the system ones', async () => {
+        await fetchAll(session, 'CREATE SCHEMA billing')
+        await fetchAll(session, 'CREATE TABLE billing.invoices (id integer, amount numeric)')
+        const tree = await session.listColumns()
+        expect(tree.defaultSchema).toBe('public')
+        expect(tree.tables).toContainEqual({
+          schema: 'billing',
+          name: 'invoices',
+          columns: ['id', 'amount'],
+        })
+        expect(tree.tables.some((t) => t.schema === 'pg_catalog')).toBe(false)
+      })
+
       test('returns values the way the other engines do', async () => {
         const { columns, rows } = await fetchAll(
           session,

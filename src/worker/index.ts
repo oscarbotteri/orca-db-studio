@@ -34,6 +34,7 @@ export default function activate(orca: OrcaWorkerApi): void {
     return {}
   })
   orca.panels.handle('explorer.listObjects', ({ ref }) => registry.listObjects(ref))
+  orca.panels.handle('editor.schema', ({ ref }) => registry.listColumns(ref))
   orca.panels.handle('table.open', (input) => openTable(orca, registry, input))
   orca.panels.handle('connection.info', async ({ ref }) => ({
     dialect: await registry.dialect(ref),

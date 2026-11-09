@@ -44,6 +44,16 @@ export function driverContract(name: string, target: ContractTarget): void {
       ])
     })
 
+    test('lists the columns of every table and view, in table order', async () => {
+      const name = typeof target.schema === 'function' ? target.schema() : target.schema
+      const tree = await session.listColumns()
+      expect(tree.defaultSchema).toBe(name)
+      expect(tree.tables.filter((t) => t.schema === name)).toEqual([
+        { schema: name, name: 'item_names', columns: ['name'] },
+        { schema: name, name: 'items', columns: ['id', 'name'] },
+      ])
+    })
+
     test('reports affected rows for a statement without rows', async () => {
       const cursor = await session.query("INSERT INTO items (id, name) VALUES (1, 'a'), (2, 'b')", {
         queryId: 'insert',

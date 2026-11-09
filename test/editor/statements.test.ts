@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 import {
   connectionLineChange,
   connectionRef,
+  changesSchema,
   isTableQuery,
   statementAt,
   statementCount,
@@ -108,6 +109,31 @@ describe('isTableQuery', () => {
       isTableQuery('-- db-studio: connection=/a.db\nSELECT * FROM t LIMIT 1; DROP TABLE t'),
     ).toBe(false)
     expect(isTableQuery('SELECT * FROM t LIMIT 1')).toBe(false)
+  })
+})
+
+describe('changesSchema', () => {
+  test('is true for CREATE, ALTER, DROP and RENAME, in any case', () => {
+    expect(changesSchema('CREATE TABLE t (id INT)')).toBe(true)
+    expect(changesSchema('alter table t add column x int')).toBe(true)
+    expect(changesSchema('Drop View v')).toBe(true)
+    expect(changesSchema('RENAME TABLE a TO b')).toBe(true)
+  })
+
+  test('looks past the whitespace and comments ahead of the statement', () => {
+    expect(changesSchema('  \n-- add the table\n/* v2 */ create table t (id int)')).toBe(true)
+  })
+
+  test('is false for statements that only read or change rows', () => {
+    expect(changesSchema('SELECT 1')).toBe(false)
+    expect(changesSchema('INSERT INTO t VALUES (1)')).toBe(false)
+    expect(changesSchema('DELETE FROM t')).toBe(false)
+    expect(changesSchema('-- drop table t\nSELECT 1')).toBe(false)
+  })
+
+  test('is false for a name that merely starts with the keyword', () => {
+    expect(changesSchema('creators')).toBe(false)
+    expect(changesSchema('')).toBe(false)
   })
 })
 

@@ -3,10 +3,12 @@ import {
   autocompletion,
   completionKeymap,
   bracketMatching,
+  Compartment,
   defaultKeymap,
   EditorState,
   drawSelection,
   EditorView,
+  type Extension,
   highlightActiveLine,
   highlightActiveLineGutter,
   history,
@@ -20,6 +22,7 @@ import {
   sql,
 } from '../../vendor/codemirror.js'
 import type { SqlDialect } from '../protocol'
+import type { CompletionSchema } from './sql-schema'
 import { sqlTheme } from './sql-theme'
 import type { TextChange } from './statements'
 
@@ -43,41 +46,49 @@ export interface SqlEditor {
   replace(text: string): void
   /** Applies an edit as typing would, so the document syncs it like any other change. */
   change(change: TextChange): void
+  /** Completes the connection's tables and columns too; the text, cursor and undo history stay. */
+  setCompletion(dialect: SqlDialect, schema: CompletionSchema | undefined): void
+}
+
+function language(dialect: SqlDialect, schema: CompletionSchema | undefined): Extension {
+  return sql({ dialect: DIALECTS[dialect], ...schema })
+}
+
+function extensions(options: SqlEditorOptions, sqlLanguage: Compartment): Extension[] {
+  return [
+    lineNumbers(),
+    highlightActiveLine(),
+    highlightActiveLineGutter(),
+    drawSelection(),
+    bracketMatching(),
+    history(),
+    autocompletion(),
+    sqlLanguage.of(language(options.dialect, undefined)),
+    sqlTheme,
+    EditorState.readOnly.of(options.readOnly),
+    keymap.of([
+      {
+        key: 'Mod-Enter',
+        run: () => {
+          options.onRun()
+          return true
+        },
+      },
+      ...completionKeymap,
+      ...historyKeymap,
+      ...defaultKeymap,
+    ]),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) options.onChange(update.state.doc.toString())
+    }),
+  ]
 }
 
 export function createSqlEditor(options: SqlEditorOptions): SqlEditor {
+  const sqlLanguage = new Compartment()
   const view = new EditorView({
     parent: options.parent,
-    state: EditorState.create({
-      doc: options.text,
-      extensions: [
-        lineNumbers(),
-        highlightActiveLine(),
-        highlightActiveLineGutter(),
-        drawSelection(),
-        bracketMatching(),
-        history(),
-        autocompletion(),
-        sql({ dialect: DIALECTS[options.dialect] }),
-        sqlTheme,
-        EditorState.readOnly.of(options.readOnly),
-        keymap.of([
-          {
-            key: 'Mod-Enter',
-            run: () => {
-              options.onRun()
-              return true
-            },
-          },
-          ...completionKeymap,
-          ...historyKeymap,
-          ...defaultKeymap,
-        ]),
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) options.onChange(update.state.doc.toString())
-        }),
-      ],
-    }),
+    state: EditorState.create({ doc: options.text, extensions: extensions(options, sqlLanguage) }),
   })
   return {
     text: () => view.state.doc.toString(),
@@ -91,6 +102,9 @@ export function createSqlEditor(options: SqlEditorOptions): SqlEditor {
     },
     change(change) {
       view.dispatch({ changes: change })
+    },
+    setCompletion(dialect, schema) {
+      view.dispatch({ effects: sqlLanguage.reconfigure(language(dialect, schema)) })
     },
   }
 }

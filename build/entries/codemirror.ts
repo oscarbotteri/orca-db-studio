@@ -10,7 +10,7 @@ export {
 } from '@codemirror/lang-sql'
 export { bracketMatching, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 export { tags } from '@lezer/highlight'
-export { EditorState, type Extension } from '@codemirror/state'
+export { Compartment, EditorState, type Extension } from '@codemirror/state'
 export {
   drawSelection,
   EditorView,

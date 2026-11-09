@@ -352,6 +352,58 @@ describe('explorer.listObjects', () => {
   })
 })
 
+describe('editor.schema', () => {
+  test("answers a SQLite file's tables and views with their columns", async () => {
+    const path = await createDatabase(
+      join(root, 'shop.db'),
+      'CREATE TABLE orders (id INTEGER, total REAL); CREATE VIEW recent AS SELECT id FROM orders',
+    )
+    const w = await start()
+    const ref = await saveSqlite(w, path)
+
+    expect(await w.request('editor.schema', { ref })).toEqual({
+      defaultSchema: 'main',
+      tables: [
+        { schema: 'main', name: 'orders', columns: ['id', 'total'] },
+        { schema: 'main', name: 'recent', columns: ['id'] },
+      ],
+    })
+    await w.deactivate()
+  })
+
+  test('keeps every table but drops the columns that do not fit one answer', async () => {
+    // About 1 MB of names: more than one worker answer may carry.
+    const columns = Array.from(
+      { length: 100 },
+      (_, i) => `${'c'.repeat(95)}${String(i).padStart(3, '0')} INTEGER`,
+    )
+    const tables = Array.from(
+      { length: 100 },
+      (_, i) => `CREATE TABLE t${String(i).padStart(3, '0')} (${columns.join(', ')})`,
+    )
+    const path = await createDatabase(join(root, 'big.db'), tables.join('; '))
+    const w = await start()
+    const ref = await saveSqlite(w, path)
+
+    const tree = await w.request('editor.schema', { ref })
+
+    expect(tree.tables.map((t) => t.name)).toEqual(
+      Array.from({ length: 100 }, (_, i) => `t${String(i).padStart(3, '0')}`),
+    )
+    expect(Buffer.byteLength(JSON.stringify(tree))).toBeLessThanOrEqual(900 * 1024)
+    expect(tree.tables[0]?.columns).toHaveLength(100)
+    expect(tree.tables.at(-1)?.columns).toEqual([])
+    await w.deactivate()
+  })
+
+  test('refuses a connection that was never added', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await start()
+
+    await expect(w.request('editor.schema', { ref: path })).rejects.toThrow(`No connection ${path}`)
+  })
+})
+
 describe('Open SQLite File command', () => {
   test('asks the panel to open the connection form on SQLite', async () => {
     const host = mockHost()

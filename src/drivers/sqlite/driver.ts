@@ -5,6 +5,7 @@
 import { Worker } from 'node:worker_threads'
 import type { ConnectionConfig } from '../common/config'
 import type { Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
+import type { ColumnTree } from '../common/schema'
 import type { ThreadOp, ThreadOps, ThreadReply } from './thread'
 
 const THREAD_URL = new URL('./thread.ts', import.meta.url)
@@ -85,6 +86,10 @@ class SqliteSession implements Session {
 
   async listObjects() {
     return this.thread().call('listObjects', {})
+  }
+
+  async listColumns(): Promise<ColumnTree> {
+    return this.thread().call('listColumns', {})
   }
 
   /** Ends the thread once `timeoutMs` has passed; the returned function clears that timer. */

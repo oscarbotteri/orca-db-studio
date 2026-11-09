@@ -4,7 +4,7 @@
 import type { ConnectionOptions, FieldPacket } from 'mysql2'
 import type { ConnectionConfig, MysqlConfig } from '../common/config'
 import type { ColumnMeta, Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
-import type { SchemaTree } from '../common/schema'
+import { type ColumnRow, type ColumnTree, groupColumns, type SchemaTree } from '../common/schema'
 import { formatSize } from '../common/utils'
 
 type MysqlModule = typeof import('../../../vendor/mysql2.js')
@@ -180,6 +180,22 @@ class MysqlSession implements Session {
         node.objects.push({ name: row.name, kind: row.kind === 'VIEW' ? 'view' : 'table' })
     }
     return { schemas: [...schemas.values()] }
+  }
+
+  async listColumns(): Promise<ColumnTree> {
+    const rows = await callbackQuery<ColumnRow[]>(
+      this.#connection,
+      `SELECT c.table_schema AS \`schema\`, c.table_name AS name, c.column_name AS \`column\`
+         FROM information_schema.columns c
+        WHERE c.table_schema NOT IN (${SYSTEM_SCHEMAS.map((name) => `'${name}'`).join(', ')})
+        ORDER BY c.table_schema, BINARY c.table_name, c.ordinal_position`,
+    )
+    // Null when the connection has no default database; nothing then completes unqualified.
+    const [current] = await callbackQuery<{ schema: string | null }[]>(
+      this.#connection,
+      'SELECT DATABASE() AS `schema`',
+    )
+    return { defaultSchema: current?.schema ?? '', tables: groupColumns(rows) }
   }
 
   async #setTimeout(requested: number): Promise<void> {

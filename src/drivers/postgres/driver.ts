@@ -4,7 +4,7 @@
 import type { ClientConfig, FieldDef } from 'pg'
 import type { ConnectionConfig, PostgresConfig } from '../common/config'
 import type { ColumnMeta, Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
-import type { SchemaTree } from '../common/schema'
+import { type ColumnRow, type ColumnTree, groupColumns, type SchemaTree } from '../common/schema'
 import { formatSize } from '../common/utils'
 
 type PgModule = typeof import('../../../vendor/pg.js')
@@ -146,6 +146,23 @@ class PostgresSession implements Session {
         })
     }
     return { schemas: [...schemas.values()] }
+  }
+
+  async listColumns(): Promise<ColumnTree> {
+    const { rows } = await this.#client.query<ColumnRow>(
+      `SELECT n.nspname AS schema, c.relname AS name, a.attname AS "column"
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+        WHERE c.relkind IN ('r', 'p', 'v', 'm')
+          AND n.nspname <> 'information_schema' AND n.nspname NOT LIKE 'pg\\_%'
+        ORDER BY n.nspname, c.relname, a.attnum`,
+    )
+    // Null when the search path names no existing schema; nothing then completes unqualified.
+    const current = await this.#client.query<{ schema: string | null }>(
+      'SELECT current_schema() AS schema',
+    )
+    return { defaultSchema: current.rows[0]?.schema ?? '', tables: groupColumns(rows) }
   }
 
   async #setTimeout(requested: number): Promise<void> {
