@@ -95,7 +95,7 @@ Opening a table is not a separate view: it is a query document prefilled with a 
 | A1  | Agents       | MCP server with `list_connections`, `describe_schema`, `run_query`, injected when Orca launches agents; `run_query` returns 100 rows by default, 1000 at most | v1 |
 | A2  | Agents       | Agent access per connection: `off` or `read-only` (default)                                                               | v1      |
 | A3  | Agents       | `read-write` agent access; agent writes wait for approval in the UI, with a notification                                  | v2      |
-| A4  | Agents       | Activity log: SQL, origin (person or agent, and worktree), duration, rows, outcome                                        | v1      |
+| A4  | Agents       | Activity log: SQL, origin (person or agent, and worktree), duration, rows, outcome                                        | v2      |
 | A5  | Agents       | Open the result of an agent's query in the grid                                                                           | v2      |
 | X1  | General      | Commands in Orca's palette: new query, open table, switch connection                                                      | v1      |
 | X2  | General      | Open `psql` / `mysql` in an Orca terminal with the active connection                                                      | v3      |
