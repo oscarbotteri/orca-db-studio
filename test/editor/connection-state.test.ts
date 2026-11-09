@@ -1,29 +1,46 @@
 // When a query document must offer the connection chooser, and what it says.
 import { describe, expect, test } from 'vitest'
 import { chooserState, connectionEntries } from '../../src/editor/connection-state'
+import type { ConnectionEntry } from '../../src/protocol'
 
-const SHOP = { ref: '/data/shop.db', name: 'shop.db', detail: 'data' }
+const SHOP: ConnectionEntry = {
+  ref: '/data/shop.db',
+  name: 'shop.db',
+  detail: 'data',
+  origin: 'saved',
+}
 
-const WORKTREE = { ref: 'env:DATABASE_URL:w1', name: 'api', detail: 'app@db:5432/shop' }
+const WORKTREE: ConnectionEntry = {
+  ref: 'env:DATABASE_URL:w1',
+  name: 'api',
+  detail: 'app@db:5432/shop',
+  origin: 'worktree',
+}
 
-const PG = { ref: 'a5f226d7', name: 'shop', detail: '127.0.0.1:54329/shop' }
+const PG: ConnectionEntry = {
+  ref: 'a5f226d7',
+  name: 'shop',
+  detail: '127.0.0.1:54329/shop',
+  origin: 'saved',
+}
 
 describe('connectionEntries', () => {
-  test('lists SQLite files and saved servers together', () => {
-    expect(connectionEntries({ sqliteFiles: [SHOP], servers: [PG], worktrees: [] })).toEqual([
+  test('lists saved connections, then worktree connections', () => {
+    expect(connectionEntries({ saved: [SHOP, PG], worktrees: [WORKTREE] })).toEqual([
       SHOP,
       PG,
+      WORKTREE,
     ])
   })
 
   test('a worktree connection is offered and is not reported as gone', () => {
-    const entries = connectionEntries({ sqliteFiles: [], servers: [], worktrees: [WORKTREE] })
+    const entries = connectionEntries({ saved: [], worktrees: [WORKTREE] })
     expect(entries).toEqual([WORKTREE])
     expect(chooserState(WORKTREE.ref, entries, false).needsChoice).toBe(false)
   })
 
   test('a saved server is not reported as gone by the chooser', () => {
-    const entries = connectionEntries({ sqliteFiles: [], servers: [PG], worktrees: [] })
+    const entries = connectionEntries({ saved: [PG], worktrees: [] })
     expect(chooserState(PG.ref, entries, false)).toEqual({ needsChoice: false, notice: undefined })
   })
 })

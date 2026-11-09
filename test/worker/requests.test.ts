@@ -6,7 +6,7 @@ import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { hostError, mockHost, mountWorker, type TestWorker } from 'orca/testing'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { CHOOSER_REQUEST_KEY } from '../../src/protocol'
+import { SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
 import * as worker from '../../src/worker/index'
 
 let root: string
@@ -78,30 +78,33 @@ describe('sqlite.findFiles', () => {
   })
 })
 
-describe('sqlite.add', () => {
-  test('adds a SQLite file by absolute path and lists it as a connection', async () => {
+function sqliteForm(path: string, name = basename(path)) {
+  return { name, engine: 'sqlite' as const, path }
+}
+
+async function saveSqlite(w: TestWorker, path: string, name?: string): Promise<string> {
+  return (await w.request('connection.save', { form: sqliteForm(path, name) })).ref
+}
+
+describe('saving a SQLite file', () => {
+  test('saves a SQLite file by absolute path and lists it as a saved connection', async () => {
     const path = await createDatabase(join(root, 'shop.db'))
     const w = await start()
 
-    const added = await w.request('sqlite.add', { path })
+    const saved = await w.request('connection.save', { form: sqliteForm(path, 'Shop') })
 
-    expect(added).toEqual({ ref: path, name: 'shop.db', detail: basename(root) })
-    expect(await w.request('connections.list')).toEqual({
-      sqliteFiles: [added],
-      servers: [],
-      worktrees: [],
-    })
+    expect(saved).toMatchObject({ name: 'Shop', detail: basename(root), origin: 'saved' })
+    expect(await w.request('connections.list')).toEqual({ saved: [saved], worktrees: [] })
     expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
   })
 
-  test('keeps a file added twice once', async () => {
+  test('refuses a file that is already saved, naming the connection', async () => {
     const path = await createDatabase(join(root, 'shop.db'))
     const w = await start()
+    await saveSqlite(w, path, 'Shop')
 
-    await w.request('sqlite.add', { path })
-    await w.request('sqlite.add', { path })
-
-    expect((await w.request('connections.list')).sqliteFiles).toHaveLength(1)
+    await expect(saveSqlite(w, path, 'Again')).rejects.toThrow('This file is already saved as Shop')
+    expect((await w.request('connections.list')).saved).toHaveLength(1)
   })
 
   test('refuses a file that is not a SQLite database with a clear error', async () => {
@@ -109,121 +112,179 @@ describe('sqlite.add', () => {
     await writeFile(path, 'plain text')
     const w = await start()
 
-    await expect(w.request('sqlite.add', { path })).rejects.toThrow(
-      `${path} is not a SQLite database`,
-    )
-    expect(await w.request('connections.list')).toEqual({
-      sqliteFiles: [],
-      servers: [],
-      worktrees: [],
-    })
+    await expect(saveSqlite(w, path)).rejects.toThrow(`${path} is not a SQLite database`)
+    expect(await w.request('connections.list')).toEqual({ saved: [], worktrees: [] })
   })
 
   test('refuses a relative path', async () => {
     const w = await start()
 
-    await expect(w.request('sqlite.add', { path: 'data/app.db' })).rejects.toThrow(
+    await expect(saveSqlite(w, 'data/app.db')).rejects.toThrow(
       'Enter an absolute path to a SQLite file',
     )
   })
 
-  test('remembers added files across worker restarts, storing only the path', async () => {
+  test('names a file without a name after the file', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await start()
+
+    const saved = await w.request('connection.save', { form: sqliteForm(path, ' ') })
+
+    expect(saved.name).toBe('shop.db')
+  })
+
+  test('a server turned into a SQLite file drops its password', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const host = mockHost()
+    const w = await mountWorker(worker, { host })
+    const { ref } = await w.request('connection.save', { form: PG_FORM, password: 'pw' })
+
+    await w.request('connection.save', { ref, form: sqliteForm(path) })
+
+    expect(host.data().secrets).toEqual({})
+    expect((await w.request('connection.get', { ref })).hasPassword).toBe(false)
+    await w.deactivate()
+  })
+
+  test('remembers saved files across worker restarts, with no password', async () => {
     const path = await createDatabase(join(root, 'shop.db'))
     const host = mockHost()
     const first = await mountWorker(worker, { host })
-    await first.request('sqlite.add', { path })
+    const ref = await first.request('connection.save', {
+      form: sqliteForm(path, 'Shop'),
+      password: 'ignored',
+    })
     await first.deactivate()
 
     const second = await mountWorker(worker, { host })
 
-    expect((await second.request('connections.list')).sqliteFiles.map((c) => c.ref)).toEqual([path])
-    expect(Object.values(host.data().storage)).toContainEqual([path])
+    expect((await second.request('connections.list')).saved).toEqual([ref])
+    expect(await second.request('connection.get', { ref: ref.ref })).toEqual({
+      form: sqliteForm(path, 'Shop'),
+      hasPassword: false,
+    })
+    expect(host.data().secrets).toEqual({})
+    await second.deactivate()
+  })
+
+  test('connection.test opens the file and closes it again', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const w = await start()
+
+    await w.request('connection.test', { form: sqliteForm(path) })
+    await expect(
+      w.request('connection.test', { form: sqliteForm(join(root, 'missing.db')) }),
+    ).rejects.toThrow()
+    expect((await w.request('connections.list')).saved).toEqual([])
+  })
+
+  test('an edit renames the file and points it at another, keeping its ref', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const moved = await createDatabase(
+      join(root, 'moved', 'shop.db'),
+      'CREATE TABLE moved (id INTEGER)',
+    )
+    const w = await start()
+    const ref = await saveSqlite(w, path)
+    await w.request('explorer.listObjects', { ref })
+
+    await w.request('connection.save', { ref, form: sqliteForm(moved, 'Moved') })
+
+    expect((await w.request('connections.list')).saved).toEqual([
+      { ref, name: 'Moved', detail: 'moved', origin: 'saved' },
+    ])
+    const tree = await w.request('explorer.listObjects', { ref })
+    expect(tree.schemas[0]?.objects.map((o) => o.name)).toEqual(['moved'])
+    await w.deactivate()
+  })
+
+  test('lists saved connections by name, servers and SQLite files together', async () => {
+    const w = await start()
+    await saveSqlite(w, await createDatabase(join(root, 'b.db')), 'beta')
+    await w.request('connection.save', { form: { ...PG_FORM, name: 'Gamma' } })
+    await saveSqlite(w, await createDatabase(join(root, 'a.db')), 'Alpha')
+
+    const { saved } = await w.request('connections.list')
+
+    expect(saved.map((c) => c.name)).toEqual(['Alpha', 'beta', 'Gamma'])
   })
 })
 
-describe('sqlite.remove', () => {
-  test('forgets a stored file, leaves it on disk and notifies the panel', async () => {
+describe('deleting a SQLite connection', () => {
+  test('forgets it, leaves the file on disk and notifies the panel', async () => {
     const path = await createDatabase(join(root, 'shop.db'))
     const keep = await createDatabase(join(root, 'keep.db'))
-    const host = mockHost()
-    const w = await mountWorker(worker, { host })
-    await w.request('sqlite.add', { path })
-    await w.request('sqlite.add', { path: keep })
+    const w = await start()
+    const ref = await saveSqlite(w, path)
+    const kept = await saveSqlite(w, keep)
     const before = w.posts.length
 
-    await w.request('sqlite.remove', { path })
+    await w.request('connection.delete', { ref })
 
-    expect((await w.request('connections.list')).sqliteFiles.map((c) => c.ref)).toEqual([keep])
+    expect((await w.request('connections.list')).saved.map((c) => c.ref)).toEqual([kept])
     expect(await readFile(path)).toBeInstanceOf(Buffer)
     expect(w.posts.slice(before)).toContainEqual({ event: 'connections.changed', payload: {} })
     await w.deactivate()
   })
 
-  test('refuses a file that is not stored and changes nothing', async () => {
+  test('closes the open session: a query on it fails like any unknown connection', async () => {
     const path = await createDatabase(join(root, 'shop.db'))
-    const w = await mountWorker(worker, { host: mockHost() })
-    await w.request('sqlite.add', { path })
+    const w = await start()
+    const ref = await saveSqlite(w, path)
+    await w.request('query.run', { ref, sql: 'SELECT 1', documentId: 'd1' })
 
-    await expect(w.request('sqlite.remove', { path: join(root, 'other.db') })).rejects.toThrow(
-      `No connection ${join(root, 'other.db')}`,
-    )
-    expect((await w.request('connections.list')).sqliteFiles).toHaveLength(1)
+    await w.request('connection.delete', { ref })
+
+    await expect(
+      w.request('query.run', { ref, sql: 'SELECT 1', documentId: 'd1' }),
+    ).rejects.toThrow(`No connection ${ref}`)
     await w.deactivate()
   })
 
-  test('the removal survives a worker restart and closes the open session', async () => {
-    const path = await createDatabase(join(root, 'shop.db'))
-    const host = mockHost()
-    const first = await mountWorker(worker, { host })
-    await first.request('sqlite.add', { path })
-    await first.request('explorer.listObjects', { ref: path })
+  test('a deleted file can be saved again and is still found in its workspace', async () => {
+    const path = await createDatabase(join(root, 'api', 'app.db'))
+    const w = await start([{ name: 'api' }])
+    await w.request('connection.delete', { ref: await saveSqlite(w, path) })
 
-    await first.request('sqlite.remove', { path })
-    await expect(first.request('explorer.listObjects', { ref: path })).rejects.toThrow(
-      `No connection ${path}`,
-    )
+    const { files } = await w.request('sqlite.findFiles')
+    await saveSqlite(w, path)
+
+    expect(files.map((f) => f.path)).toEqual([path])
+    expect((await w.request('connections.list')).saved).toHaveLength(1)
+    await w.deactivate()
+  })
+})
+
+describe('SQLite files saved by v0.2.0', () => {
+  test('are listed by file name and keep their path as ref, so their documents still run', async () => {
+    const path = await createDatabase(join(root, 'data', 'shop.db'))
+    const host = mockHost({ storage: { 'sqlite-files': [path] } })
+    const w = await mountWorker(worker, { host })
+
+    expect((await w.request('connections.list')).saved).toEqual([
+      { ref: path, name: 'shop.db', detail: 'data', origin: 'saved' },
+    ])
+    expect(
+      await w.request('query.run', { ref: path, sql: 'SELECT 1 AS one', documentId: 'd1' }),
+    ).toMatchObject({ rows: [[1]] })
+    expect(host.data().storage['sqlite-files']).toBeUndefined()
+    await w.deactivate()
+  })
+
+  test('join the connections already saved without duplicating any', async () => {
+    const path = await createDatabase(join(root, 'shop.db'))
+    const host = mockHost({ storage: { 'sqlite-files': [path] } })
+    const first = await mountWorker(worker, { host })
+    await first.request('connection.save', { form: PG_FORM })
     await first.deactivate()
 
     const second = await mountWorker(worker, { host })
-    expect((await second.request('connections.list')).sqliteFiles).toEqual([])
+
+    expect((await second.request('connections.list')).saved.map((c) => c.name)).toEqual([
+      'Shop DB',
+      'shop.db',
+    ])
     await second.deactivate()
-  })
-
-  test('a query on a removed file fails like any unknown connection', async () => {
-    const path = await createDatabase(join(root, 'shop.db'))
-    const w = await mountWorker(worker, { host: mockHost() })
-    await w.request('sqlite.add', { path })
-    await w.request('query.run', { ref: path, sql: 'SELECT 1', documentId: 'd1' })
-    await w.request('sqlite.remove', { path })
-
-    await expect(
-      w.request('query.run', { ref: path, sql: 'SELECT 1', documentId: 'd1' }),
-    ).rejects.toThrow(`No connection ${path}`)
-    await w.deactivate()
-  })
-
-  test('a removed file found in a workspace is still offered by the chooser', async () => {
-    const path = await createDatabase(join(root, 'api', 'app.db'))
-    const w = await start([{ name: 'api' }])
-    await w.request('sqlite.add', { path })
-    await w.request('sqlite.remove', { path })
-
-    const { files } = await w.request('sqlite.findFiles')
-
-    expect(files.map((f) => f.path)).toEqual([path])
-    await w.deactivate()
-  })
-
-  test('a removed file can be added again', async () => {
-    const path = await createDatabase(join(root, 'shop.db'))
-    const w = await mountWorker(worker, { host: mockHost() })
-    await w.request('sqlite.add', { path })
-    await w.request('sqlite.remove', { path })
-
-    await w.request('sqlite.add', { path })
-
-    expect((await w.request('connections.list')).sqliteFiles.map((c) => c.ref)).toEqual([path])
-    await w.deactivate()
   })
 })
 
@@ -234,7 +295,7 @@ describe('explorer.listObjects', () => {
       'CREATE TABLE orders (id INTEGER); CREATE TABLE customers (id INTEGER); CREATE VIEW recent AS SELECT id FROM orders',
     )
     const w = await start()
-    const { ref } = await w.request('sqlite.add', { path })
+    const ref = await saveSqlite(w, path)
 
     expect(await w.request('explorer.listObjects', { ref })).toEqual({
       schemas: [
@@ -262,15 +323,15 @@ describe('explorer.listObjects', () => {
 })
 
 describe('Open SQLite File command', () => {
-  test('asks the panel to show the SQLite file chooser', async () => {
+  test('asks the panel to open the connection form on SQLite', async () => {
     const host = mockHost()
     const w = await mountWorker(worker, { host })
 
     const message = await w.command('db-studio.openSqliteFile')
 
-    expect(message).toBe('Choose a SQLite file in the DB Studio panel.')
-    expect(host.data().storage[CHOOSER_REQUEST_KEY]).toBe(true)
-    expect(w.posts).toContainEqual({ event: 'sqlite.chooserRequested', payload: {} })
+    expect(message).toBe('Add the SQLite file in the DB Studio panel.')
+    expect(host.data().storage[SQLITE_FORM_REQUEST_KEY]).toBe(true)
+    expect(w.posts).toContainEqual({ event: 'sqlite.formRequested', payload: {} })
   })
 })
 
@@ -311,7 +372,7 @@ async function shopRef(w: TestWorker): Promise<string> {
     join(root, 'shop.db'),
     'CREATE TABLE orders (id INTEGER); INSERT INTO orders VALUES (1),(2),(3),(4),(5); CREATE TABLE "we""ird" (id INTEGER)',
   )
-  return (await w.request('sqlite.add', { path })).ref
+  return saveSqlite(w, path)
 }
 
 describe('table.open', () => {
@@ -577,7 +638,7 @@ describe('connection.save', () => {
     const saved = await w.request('connection.save', { form: PG_FORM, password: 's3cret-pw' })
 
     expect(saved).toMatchObject({ name: 'Shop DB', detail: 'app@db.internal:5432/shop' })
-    expect((await w.request('connections.list')).servers).toEqual([saved])
+    expect((await w.request('connections.list')).saved).toEqual([saved])
     expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
     expect(JSON.stringify(host.data().storage)).not.toContain('s3cret-pw')
     expect(Object.values(host.data().secrets)).toEqual(['s3cret-pw'])
@@ -595,7 +656,7 @@ describe('connection.save without a secrets store', () => {
 
     expect(host.data().storage).toEqual({})
     expect(host.data().secrets).toEqual({})
-    expect((await w.request('connections.list')).servers).toEqual([])
+    expect((await w.request('connections.list')).saved).toEqual([])
   })
 
   test('still saves a connection that has no password', async () => {
@@ -604,7 +665,7 @@ describe('connection.save without a secrets store', () => {
 
     await w.request('connection.save', { form: PG_FORM })
 
-    expect((await w.request('connections.list')).servers).toHaveLength(1)
+    expect((await w.request('connections.list')).saved).toHaveLength(1)
   })
 })
 
@@ -623,7 +684,7 @@ describe('editing and deleting a connection', () => {
 
     await w.request('connection.save', { ref, form: PG_FORM, password: 'second-pw' })
     expect(Object.values(host.data().secrets)).toEqual(['second-pw'])
-    expect((await w.request('connections.list')).servers).toHaveLength(1)
+    expect((await w.request('connections.list')).saved).toHaveLength(1)
   })
 
   test('delete removes the registry entry and the password', async () => {
@@ -633,7 +694,7 @@ describe('editing and deleting a connection', () => {
 
     await w.request('connection.delete', { ref })
 
-    expect((await w.request('connections.list')).servers).toEqual([])
+    expect((await w.request('connections.list')).saved).toEqual([])
     expect(host.data().secrets).toEqual({})
     await expect(w.request('connection.get', { ref })).rejects.toThrow(`No connection ${ref}`)
   })
@@ -690,7 +751,7 @@ describe('saved connection details', () => {
 
     await w.request('connection.delete', { ref })
 
-    expect((await w.request('connections.list')).servers).toEqual([])
+    expect((await w.request('connections.list')).saved).toEqual([])
     expect(w.posts.filter((p) => p.event === 'connections.changed')).toHaveLength(2)
   })
 })
@@ -751,7 +812,7 @@ describe('query.run values', () => {
   async function run(sql: string, setup?: string) {
     const { worker: w } = await startWithFocus([], null)
     const path = await createDatabase(join(root, 'values.db'), setup ?? 'CREATE TABLE t (id)')
-    const { ref } = await w.request('sqlite.add', { path })
+    const ref = await saveSqlite(w, path)
     return w.request('query.run', { ref, sql, documentId: 'd1' })
   }
 
@@ -1019,7 +1080,7 @@ describe('query.cancel and the query timeout', () => {
   test('the panel and other connections are answered while a query runs', async () => {
     const { w, ref } = await slowRunner({ queryTimeoutSeconds: 2 })
     const otherPath = await createDatabase(join(root, 'other.db'), 'CREATE TABLE u (id INTEGER)')
-    const other = (await w.request('sqlite.add', { path: otherPath })).ref
+    const other = await saveSqlite(w, otherPath)
     const running = w.request('query.run', { ref, sql: SLOW, documentId: 'd1' })
     const settled = running.then(
       () => undefined,
@@ -1035,7 +1096,7 @@ describe('query.cancel and the query timeout', () => {
       documentId: 'd2',
     })
 
-    expect(list.sqliteFiles).toHaveLength(2)
+    expect(list.saved).toHaveLength(2)
     expect(tree.schemas[0]?.objects.map((o) => o.name)).toEqual(['u'])
     expect(result.rows).toEqual([[7]])
     await settled

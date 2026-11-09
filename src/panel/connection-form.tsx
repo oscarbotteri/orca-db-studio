@@ -1,9 +1,9 @@
-// The form to create, test, edit and delete a saved server connection. C1, C2
+// The form to create, test, edit and delete a saved connection. C1, C2, C3
 import { Button, Callout, Card, Input, Row, read, Select, Stack, set } from 'orca'
-import type { ServerEngine } from '../protocol'
 import {
   closeForm,
   deleteFromForm,
+  type Engine,
   editDraft,
   type FormDraft,
   formBusy,
@@ -14,32 +14,21 @@ import {
   setEngine,
   testForm,
 } from './connection-form-state'
+import { SqliteFields } from './sqlite-fields'
 
 const ENGINES = [
   { value: 'postgres', label: 'PostgreSQL' },
   { value: 'mysql', label: 'MySQL / MariaDB' },
+  { value: 'sqlite', label: 'SQLite' },
 ]
 
 interface FormPartProps {
   draft: FormDraft
 }
 
-function ConnectionFields({ draft }: FormPartProps) {
+function ServerFields({ draft }: FormPartProps) {
   return (
     <>
-      <Input
-        label="Connection string"
-        type="password"
-        placeholder="postgres://user:password@host:5432/database"
-        onChange={pasteConnectionString}
-      />
-      <Input label="Name" value={draft.name} onChange={(name) => editDraft({ name })} />
-      <Select
-        label="Engine"
-        value={draft.engine}
-        options={ENGINES}
-        onChange={(value) => setEngine(value as ServerEngine)}
-      />
       <Input label="Host" value={draft.host} onChange={(host) => editDraft({ host })} />
       <Input label="Port" value={draft.port} onChange={(port) => editDraft({ port })} />
       <Input
@@ -55,6 +44,29 @@ function ConnectionFields({ draft }: FormPartProps) {
         placeholder={draft.hasPassword ? 'Unchanged' : ''}
         onChange={(password) => set(formPassword, password)}
       />
+    </>
+  )
+}
+
+function ConnectionFields({ draft }: FormPartProps) {
+  return (
+    <>
+      {draft.engine === 'sqlite' ? null : (
+        <Input
+          label="Connection string"
+          type="password"
+          placeholder="postgres://user:password@host:5432/database"
+          onChange={pasteConnectionString}
+        />
+      )}
+      <Input label="Name" value={draft.name} onChange={(name) => editDraft({ name })} />
+      <Select
+        label="Engine"
+        value={draft.engine}
+        options={ENGINES}
+        onChange={(value) => setEngine(value as Engine)}
+      />
+      {draft.engine === 'sqlite' ? <SqliteFields draft={draft} /> : <ServerFields draft={draft} />}
     </>
   )
 }

@@ -2,9 +2,20 @@
 import { hostError, mockHost, mount } from 'orca/testing'
 import { describe, expect, test } from 'vitest'
 import * as panel from '../../src/panel/index'
-import { CHOOSER_REQUEST_KEY, type ConnectionEntry, type SchemaTree } from '../../src/protocol'
+import { type ConnectionEntry, type SchemaTree, SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
 
-const SHOP: ConnectionEntry = { ref: '/data/shop.db', name: 'shop.db', detail: 'data' }
+const SHOP: ConnectionEntry = {
+  ref: '/data/shop.db',
+  name: 'shop.db',
+  detail: 'data',
+  origin: 'saved',
+}
+const API: ConnectionEntry = {
+  ref: 'env:DATABASE_URL:w1',
+  name: 'api',
+  detail: 'app@db:5432/shop',
+  origin: 'worktree',
+}
 
 const SHOP_TREE: SchemaTree = {
   schemas: [
@@ -22,21 +33,47 @@ const FOUND = {
   files: [{ path: '/work/api/app.db', relativePath: 'app.db', workspaceName: 'api' }],
 }
 
-describe('SQLite files group', () => {
-  test('offers to open a file when there are none', async () => {
+function treeItems(p: {
+  find: (q: { role: string }) => { props: Record<string, unknown> } | null
+}) {
+  return p.find({ role: 'tree' })?.props.items as {
+    key: string
+    label: string
+    description?: string
+    icon?: string
+  }[]
+}
+
+describe('connections list', () => {
+  test('offers a new connection when there are none', async () => {
     const p = await mount(panel, {
-      host: mockHost({
-        requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [] } },
-      }),
+      host: mockHost({ requests: { 'connections.list': { saved: [], worktrees: [] } } }),
     })
 
-    expect(p.find({ label: 'No SQLite files' })).not.toBeNull()
+    expect(p.find({ label: 'No connections' })).not.toBeNull()
+    await p.press({ text: 'New connection' })
+    expect(p.find({ label: 'Name' })).not.toBeNull()
+  })
+
+  test('lists saved and worktree connections in one tree, each marked with its origin', async () => {
+    const p = await mount(panel, {
+      host: mockHost({ requests: { 'connections.list': { saved: [SHOP], worktrees: [API] } } }),
+    })
+
+    expect(p.findAll({ role: 'tree' })).toHaveLength(1)
+    expect(p.find({ text: 'Worktree connections' })).toBeNull()
+    expect(
+      treeItems(p).map(({ label, description, icon }) => ({ label, description, icon })),
+    ).toEqual([
+      { label: 'shop.db', description: 'data', icon: 'database' },
+      { label: 'api', description: '.env · app@db:5432/shop', icon: 'branch' },
+    ])
   })
 
   test('expanding a connection shows its schemas, tables and views', async () => {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
+        'connections.list': { saved: [SHOP], worktrees: [] },
         'explorer.listObjects': SHOP_TREE,
       },
     })
@@ -55,141 +92,127 @@ describe('SQLite files group', () => {
       input: { ref: SHOP.ref },
     })
   })
-})
 
-describe('removing a SQLite file', () => {
-  test('Remove on a file row forgets it, collapses its tree and drops it from the list', async () => {
-    let files = [SHOP]
-    const host = mockHost({
-      requests: {
-        'connections.list': () => ({ sqliteFiles: files, servers: [], worktrees: [] }),
-        'explorer.listObjects': SHOP_TREE,
-        'sqlite.remove': (input: { path: string }) => {
-          files = files.filter((f) => f.ref !== input.path)
-          return {}
-        },
-      },
-    })
-    const p = await mount(panel, { host })
-    const key = JSON.stringify(['connection', SHOP.ref])
-    await p.expand({ role: 'tree' }, key)
-
-    await p.activateItem({ role: 'tree' }, key)
-    await p.press({ text: 'Remove' })
-
-    expect(host.callsOf('plugin.request')).toContainEqual({
-      name: 'sqlite.remove',
-      input: { path: SHOP.ref },
-    })
-    expect(p.find({ label: 'No SQLite files' })).not.toBeNull()
-    expect(p.find({ text: 'Remove' })).toBeNull()
-  })
-
-  test('Cancel leaves the file in the list', async () => {
-    const host = mockHost({
-      requests: { 'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] } },
-    })
+  test('Enter on a worktree connection opens nothing', async () => {
+    const host = mockHost({ requests: { 'connections.list': { saved: [], worktrees: [API] } } })
     const p = await mount(panel, { host })
 
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', SHOP.ref]))
-    await p.press({ text: 'Cancel' })
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', API.ref]))
 
+    expect(p.find({ label: 'Name' })).toBeNull()
     expect(host.callsOf('plugin.request')).not.toContainEqual(
-      expect.objectContaining({ name: 'sqlite.remove' }),
+      expect.objectContaining({ name: 'connection.get' }),
     )
-    expect(p.find({ text: 'Remove' })).toBeNull()
-  })
-
-  test('shows why a removal failed', async () => {
-    const host = mockHost({
-      requests: {
-        'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
-        'sqlite.remove': () => {
-          throw hostError('action_failed', 'No connection /data/shop.db')
-        },
-      },
-    })
-    const p = await mount(panel, { host })
-
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', SHOP.ref]))
-    await p.press({ text: 'Remove' })
-
-    expect(p.find({ text: /No connection \/data\/shop.db/ })).not.toBeNull()
   })
 })
 
-describe('SQLite file chooser', () => {
-  test('adds a file found in the workspaces and closes', async () => {
-    let added: string | undefined
+describe('SQLite in the connection form', () => {
+  const SQLITE_FORM = { name: 'shop.db', engine: 'sqlite' as const, path: '/data/shop.db' }
+
+  async function mountWith(requests: Record<string, unknown> = {}, storage = {}) {
     const host = mockHost({
+      storage,
       requests: {
-        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
+        'connections.list': { saved: [SHOP], worktrees: [] },
         'sqlite.findFiles': FOUND,
-        'sqlite.add': ({ path }) => {
-          added = path
-          return { ref: path, name: 'app.db', detail: 'api' }
-        },
+        ...requests,
+      } as never,
+    })
+    return { host, p: await mount(panel, { host }) }
+  }
+
+  test('choosing SQLite asks for a path instead of a server', async () => {
+    const { p } = await mountWith()
+
+    await p.press({ label: 'New connection' })
+    await p.select({ label: 'Engine' }, 'sqlite')
+
+    expect(p.find({ label: 'Path' })).not.toBeNull()
+    expect(p.find({ label: 'Host' })).toBeNull()
+    expect(p.find({ label: 'Password' })).toBeNull()
+    expect(p.find({ label: 'Connection string' })).toBeNull()
+  })
+
+  test('saves a pasted path with its name', async () => {
+    let saved: unknown
+    const { p } = await mountWith({
+      'connection.save': (input: unknown) => {
+        saved = input
+        return SHOP
       },
     })
-    const p = await mount(panel, { host })
 
-    await p.press({ label: 'Open SQLite file' })
+    await p.press({ label: 'New connection' })
+    await p.select({ label: 'Engine' }, 'sqlite')
+    await p.type({ label: 'Name' }, 'Shop')
+    await p.type({ label: 'Path' }, '/data/shop.db')
+    await p.press({ text: 'Save' })
+
+    expect(saved).toEqual({ form: { name: 'Shop', engine: 'sqlite', path: '/data/shop.db' } })
+    expect(p.find({ label: 'Path' })).toBeNull()
+  })
+
+  test('a file found in the workspaces fills the path, and the name when it is empty', async () => {
+    const { p } = await mountWith()
+
+    await p.press({ label: 'New connection' })
+    await p.select({ label: 'Engine' }, 'sqlite')
+    await p.press({ text: 'Find in workspaces' })
     await p.press({ label: 'app.db' })
 
-    expect(added).toBe('/work/api/app.db')
-    expect(p.find({ label: 'Absolute path' })).toBeNull()
+    expect(p.find({ label: 'Path' })?.props.value).toBe('/work/api/app.db')
+    expect(p.find({ label: 'Name' })?.props.value).toBe('app.db')
   })
 
-  test('shows why a pasted path could not be added', async () => {
-    const host = mockHost({
-      requests: {
-        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
-        'sqlite.findFiles': { files: [] },
-        'sqlite.add': () => {
-          throw hostError('action_failed', '/tmp/notes.txt is not a SQLite database')
-        },
+  test('shows why a file could not be saved and keeps the form open', async () => {
+    const { p } = await mountWith({
+      'connection.save': () => {
+        throw hostError('action_failed', '/tmp/notes.txt is not a SQLite database')
       },
     })
-    const p = await mount(panel, { host })
 
-    await p.press({ label: 'Open SQLite file' })
-    await p.type({ label: 'Absolute path' }, '/tmp/notes.txt', { submit: true })
+    await p.press({ label: 'New connection' })
+    await p.select({ label: 'Engine' }, 'sqlite')
+    await p.type({ label: 'Name' }, 'Notes')
+    await p.type({ label: 'Path' }, '/tmp/notes.txt')
+    await p.press({ text: 'Save' })
 
     expect(p.find({ text: /is not a SQLite database/ })).not.toBeNull()
-    expect(p.find({ label: 'Absolute path' })).not.toBeNull()
+    expect(p.find({ label: 'Path' })).not.toBeNull()
   })
 
-  test('opens when the Open SQLite File command asked for it', async () => {
-    const host = mockHost({
-      storage: { [CHOOSER_REQUEST_KEY]: true },
-      requests: {
-        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
-        'sqlite.findFiles': FOUND,
+  test('Enter on a saved SQLite file edits it; Delete only forgets the file', async () => {
+    let deleted: unknown
+    const { p } = await mountWith({
+      'connection.get': { form: SQLITE_FORM, hasPassword: false },
+      'connection.delete': (input: unknown) => {
+        deleted = input
+        return {}
       },
     })
-    const p = await mount(panel, { host })
 
-    expect(p.find({ label: 'Absolute path' })).not.toBeNull()
-    expect(p.find({ label: 'app.db' })).not.toBeNull()
+    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', SHOP.ref]))
 
-    await p.press({ text: 'Cancel' })
-
-    expect(p.find({ label: 'Absolute path' })).toBeNull()
-    expect(host.data().storage[CHOOSER_REQUEST_KEY]).toBe(false)
+    expect(p.find({ label: 'Path' })?.props.value).toBe('/data/shop.db')
+    expect(p.find({ text: /stays on disk/ })).not.toBeNull()
+    await p.press({ text: 'Delete' })
+    expect(deleted).toEqual({ ref: SHOP.ref })
   })
 
-  test('opens with the found files when the command runs while the panel is open', async () => {
-    const host = mockHost({
-      requests: {
-        'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
-        'sqlite.findFiles': FOUND,
-      },
-    })
-    const p = await mount(panel, { host })
+  test('the Open SQLite File command opens the form on SQLite', async () => {
+    const { host, p } = await mountWith({}, { [SQLITE_FORM_REQUEST_KEY]: true })
 
-    await p.post('sqlite.chooserRequested', {})
+    expect(p.find({ label: 'Engine' })?.props.value).toBe('sqlite')
+    expect(p.find({ label: 'Path' })).not.toBeNull()
+    expect(host.data().storage[SQLITE_FORM_REQUEST_KEY]).toBe(false)
+  })
 
-    expect(p.find({ label: 'app.db' })).not.toBeNull()
+  test('the command opens the form while the panel is open', async () => {
+    const { p } = await mountWith()
+
+    await p.post('sqlite.formRequested', {})
+
+    expect(p.find({ label: 'Path' })).not.toBeNull()
   })
 })
 
@@ -201,7 +224,7 @@ describe('opening a table', () => {
   async function mountShop(open: (input: unknown) => unknown) {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
+        'connections.list': { saved: [SHOP], worktrees: [] },
         'explorer.listObjects': {
           schemas: [{ name: 'main', objects: [{ name: 'orders', kind: 'table' }] }],
         },
@@ -257,31 +280,13 @@ describe('opening a table', () => {
   })
 })
 
-describe('worktree connections', () => {
-  const API = { ref: 'env:DATABASE_URL:w1', name: 'api', detail: 'app@db:5432/shop' }
-
-  test('lists each worktree connection in its own group', async () => {
-    const host = mockHost({
-      requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [API] } },
-    })
-    const p = await mount(panel, { host })
-
-    expect(p.find({ text: 'Worktree connections' })).not.toBeNull()
-    expect(p.find({ text: 'api' })).not.toBeNull()
-  })
-
-  test('shows no group when no workspace defines the variable', async () => {
-    const host = mockHost({
-      requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [] } },
-    })
-    const p = await mount(panel, { host })
-
-    expect(p.find({ text: 'Worktree connections' })).toBeNull()
-  })
-})
-
 describe('connection form', () => {
-  const PG = { ref: 'c1', name: 'Shop DB', detail: 'app@db.internal:5432/shop' }
+  const PG: ConnectionEntry = {
+    ref: 'c1',
+    name: 'Shop DB',
+    detail: 'app@db.internal:5432/shop',
+    origin: 'saved',
+  }
   const FORM = {
     name: 'Shop DB',
     engine: 'postgres' as const,
@@ -294,7 +299,7 @@ describe('connection form', () => {
   async function mountWith(requests: Record<string, unknown> = {}) {
     const host = mockHost({
       requests: {
-        'connections.list': { sqliteFiles: [], servers: [PG], worktrees: [] },
+        'connections.list': { saved: [PG], worktrees: [] },
         ...requests,
       } as never,
     })

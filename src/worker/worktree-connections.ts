@@ -111,6 +111,7 @@ export async function listWorktreeConnections(orca: OrcaWorkerApi): Promise<Conn
       ref: worktreeRef({ variable, workspaceId: workspace.id }),
       name: workspace.name,
       detail: target.detail,
+      origin: 'worktree',
     })
   }
   return entries

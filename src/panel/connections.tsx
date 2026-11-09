@@ -1,4 +1,4 @@
-// Connections, SQLite files, worktree connections and the explorer tree. C1-C4, E1
+// One list of saved and worktree connections, and the explorer tree. C1-C4, E1
 import {
   Button,
   Callout,
@@ -16,12 +16,10 @@ import {
 import type { ConnectionEntry, SchemaNode } from '../protocol'
 import { editError, openEditForm, openNewForm } from './connection-form-state'
 import {
-  askToRemove,
   connectionKey,
   connections,
   expanded,
   objects,
-  openChooser,
   openError,
   openTable,
   parseKey,
@@ -30,7 +28,6 @@ import {
   toggle,
   treeKey,
 } from './state'
-import { RemoveSqliteFile } from './remove-sqlite-file'
 import { WorkspacePicker } from './workspace-picker'
 
 /** Tree key of a table, which carries what opening it needs. */
@@ -63,14 +60,16 @@ function schemaItem(ref: string, schema: SchemaNode): TreeItem {
 }
 
 function connectionItem(entry: ConnectionEntry): TreeItem {
-  const item = { key: connectionKey(entry.ref), label: entry.name, description: entry.detail }
+  const worktree = entry.origin === 'worktree'
+  const item = {
+    key: connectionKey(entry.ref),
+    label: entry.name,
+    description: worktree ? `.env · ${entry.detail}` : entry.detail,
+    icon: worktree ? ('branch' as const) : ('database' as const),
+  }
   const state = read(objects)[entry.ref]
   if (state?.status === 'loaded') {
-    return {
-      ...item,
-      icon: 'database',
-      children: state.value.schemas.map((s) => schemaItem(entry.ref, s)),
-    }
+    return { ...item, children: state.value.schemas.map((s) => schemaItem(entry.ref, s)) }
   }
   if (state?.status === 'error') {
     const error = {
@@ -79,9 +78,9 @@ function connectionItem(entry: ConnectionEntry): TreeItem {
       icon: 'error' as const,
       disabled: true,
     }
-    return { ...item, icon: 'database', children: [error] }
+    return { ...item, children: [error] }
   }
-  return { ...item, icon: 'database', hasChildren: true }
+  return { ...item, hasChildren: true }
 }
 
 function connectionOfKey(key: string): string | undefined {
@@ -90,16 +89,13 @@ function connectionOfKey(key: string): string | undefined {
 }
 
 interface ConnectionTreeProps {
-  label: string
   entries: ConnectionEntry[]
-  /** Activating a connection row itself, for the groups that edit their connections. */
-  onActionConnection?: (ref: string) => void
 }
 
-function ConnectionTree({ label, entries, onActionConnection }: ConnectionTreeProps) {
+function ConnectionTree({ entries }: ConnectionTreeProps) {
   return (
     <Tree
-      label={label}
+      label="Connections"
       items={entries.map(connectionItem)}
       expanded={read(expanded)}
       onToggle={({ key, expanded: isExpanded }) => toggle(key, isExpanded)}
@@ -107,85 +103,53 @@ function ConnectionTree({ label, entries, onActionConnection }: ConnectionTreePr
         const table = tableOfKey(key)
         if (table) return void openTable(table)
         const ref = connectionOfKey(key)
-        if (ref !== undefined) onActionConnection?.(ref)
+        // A worktree connection is edited in its .env.
+        const entry = entries.find((e) => e.ref === ref)
+        if (entry?.origin === 'saved') void openEditForm(entry.ref)
       }}
     />
   )
 }
 
-interface SqliteTreeProps {
-  entries: ConnectionEntry[]
-}
-
-function SqliteTree({ entries }: SqliteTreeProps) {
+function ConnectionList({ entries }: ConnectionTreeProps) {
   if (entries.length === 0) {
     return (
       <EmptyState
-        title="No SQLite files"
-        description="Open a .db or .sqlite file to browse its tables."
+        title="No connections"
+        description="Add a database server or a SQLite file. A worktree whose .env defines the connection variable shows up here by itself."
         icon="database"
       >
-        <Button onPress={openChooser}>Open SQLite file</Button>
+        <Button onPress={() => openNewForm()}>New connection</Button>
       </EmptyState>
     )
   }
   return (
     <>
-      <ConnectionTree label="SQLite files" entries={entries} onActionConnection={askToRemove} />
-      <Text muted>Press Enter on a file to remove it from the list.</Text>
+      <ConnectionTree entries={entries} />
+      <Text muted>Press Enter on a saved connection to edit or delete it.</Text>
     </>
   )
 }
 
-export function ServerConnections() {
+export function Connections() {
   const list = read(connections)
-  const entries = list.status === 'loaded' ? list.value.servers : []
   return (
     <Stack gap="sm">
       <Row justify="between" align="center">
         <Heading level={3}>Connections</Heading>
-        <IconButton icon="add" label="New connection" variant="ghost" onPress={openNewForm} />
+        <IconButton
+          icon="add"
+          label="New connection"
+          variant="ghost"
+          onPress={() => openNewForm()}
+        />
       </Row>
+      <WorkspacePicker />
       {read(editError) ? (
         <Callout tone="danger" title="Could not open the connection">
           {read(editError)}
         </Callout>
       ) : null}
-      {entries.length === 0 ? (
-        <Text muted>No saved connections. Press + to add a connection.</Text>
-      ) : (
-        <>
-          <ConnectionTree label="Connections" entries={entries} onActionConnection={openEditForm} />
-          <Text muted>Press Enter on a connection to edit or delete it.</Text>
-        </>
-      )}
-    </Stack>
-  )
-}
-
-export function WorktreeConnections() {
-  const list = read(connections)
-  const entries = list.status === 'loaded' ? list.value.worktrees : []
-  // Most workspaces define none: the group appears only for those that do.
-  if (entries.length === 0) return null
-  return (
-    <Stack gap="sm">
-      <Heading level={3}>Worktree connections</Heading>
-      <ConnectionTree label="Worktree connections" entries={entries} />
-    </Stack>
-  )
-}
-
-export function SqliteFiles() {
-  const list = read(connections)
-  return (
-    <Stack gap="sm">
-      <Row justify="between" align="center">
-        <Heading level={3}>SQLite files</Heading>
-        <IconButton icon="add" label="Open SQLite file" variant="ghost" onPress={openChooser} />
-      </Row>
-      <WorkspacePicker />
-      <RemoveSqliteFile />
       {read(openError) ? (
         <Callout tone="danger" title="Could not open the table">
           {read(openError)}
@@ -197,7 +161,9 @@ export function SqliteFiles() {
           {list.error}
         </Callout>
       ) : null}
-      {list.status === 'loaded' ? <SqliteTree entries={list.value.sqliteFiles} /> : null}
+      {list.status === 'loaded' ? (
+        <ConnectionList entries={[...list.value.saved, ...list.value.worktrees]} />
+      ) : null}
     </Stack>
   )
 }

@@ -6,9 +6,9 @@ export interface ChooserState {
   notice: string | undefined
 }
 
-/** Every connection a document may name: SQLite files, saved servers and worktree connections. */
+/** Every connection a document may name: saved connections, then worktree connections. */
 export function connectionEntries(list: ConnectionList): ConnectionEntry[] {
-  return [...list.sqliteFiles, ...list.servers, ...list.worktrees]
+  return [...list.saved, ...list.worktrees]
 }
 
 /**

@@ -1,14 +1,8 @@
-import { type PanelContext, plugin, read, Stack } from 'orca'
+import { type PanelContext, plugin, Stack } from 'orca'
 import { ConnectionForm } from './connection-form'
-import { ServerConnections, SqliteFiles, WorktreeConnections } from './connections'
-import { SqliteChooser } from './sqlite-chooser'
-import {
-  chooserOpen,
-  loadExpandedObjects,
-  loadFoundFiles,
-  openChooser,
-  refreshConnections,
-} from './state'
+import { openSqliteForm, sqliteFormWasRequested } from './connection-form-state'
+import { Connections } from './connections'
+import { loadExpandedObjects, refreshConnections } from './state'
 
 async function refresh(): Promise<void> {
   await refreshConnections()
@@ -17,10 +11,10 @@ async function refresh(): Promise<void> {
 
 export function setup(ctx: PanelContext): void {
   void refresh()
-  if (read(chooserOpen)) void loadFoundFiles()
+  if (sqliteFormWasRequested()) openSqliteForm()
   ctx.subscriptions.push(
     plugin.on('connections.changed', () => void refresh()),
-    plugin.on('sqlite.chooserRequested', openChooser),
+    plugin.on('sqlite.formRequested', openSqliteForm),
   )
 }
 
@@ -28,10 +22,7 @@ export default function Panel() {
   return (
     <Stack gap="md">
       <ConnectionForm />
-      <ServerConnections />
-      <WorktreeConnections />
-      {read(chooserOpen) ? <SqliteChooser /> : null}
-      <SqliteFiles />
+      <Connections />
     </Stack>
   )
 }

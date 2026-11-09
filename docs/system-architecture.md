@@ -33,12 +33,12 @@ flowchart TB
 
 **UI (frames)**
 
-- **Side panel:** saved connections, SQLite files and worktree connections, each expandable into the explorer tree (E1). Clicking a table asks the worker to open a query document for it.
+- **Side panel:** one list of connections, saved ones (servers and SQLite files) first and then worktree connections, each expandable into the explorer tree (E1). Clicking a table asks the worker to open a query document for it.
 - **Query document editor:** a custom editor for `.sql` files (ADR 0003). SQL editor on top (ADR 0001), query result grid below, full-value panel for a cell (G3). It reads the connection from the document's header line.
 
 **Worker (Node)**
 
-- **Connections:** the connection registry in `storage:own`, passwords in `secrets:own`, SQLite files by path, and worktree connections read from each worktree's `.env` on use.
+- **Connections:** the registry of saved connections (servers and SQLite files by path) in `storage:own`, server passwords in `secrets:own`, and worktree connections read from each worktree's `.env` on use.
 - **Query engine:** runs a statement through the driver interface, reads rows from the cursor up to the row limit and the result ceiling, then closes it. Keeps the full values of the rows it returned while the query document is open (G3). Supports cancel and the `queryTimeoutSeconds` setting.
 - **Documents:** creates query documents under `.db-studio/` in a workspace and opens them with `editor.open`.
 

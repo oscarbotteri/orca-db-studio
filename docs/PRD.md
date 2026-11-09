@@ -52,7 +52,7 @@ Worktree connections are the key differentiator: no existing tool understands th
 
 The MVP is done when, on all three engines, a person can:
 
-1. Create a connection (form or pasted connection string), open a SQLite file, or pick a worktree connection, all from the panel.
+1. Create a connection (form or pasted connection string) to a server or a SQLite file, or pick a worktree connection, all from the panel.
 2. Expand it in the panel and see its tables and views.
 3. Click a table: a query document opens with `SELECT * FROM <table> LIMIT 100` and runs it.
 4. Edit and run any SQL in a query document, see the first rows of the query result in a grid, open a long cell value in full, and cancel a slow query.
@@ -67,7 +67,7 @@ Opening a table is not a separate view: it is a query document prefilled with a 
 | --- | ------------ | ------------------------------------------------------------------------------------------------------------------------- | ------- |
 | C1  | Connections  | Create, edit, test and delete PostgreSQL, MySQL/MariaDB and SQLite connections; passwords only in Orca's secrets store    | MVP     |
 | C2  | Connections  | Paste a connection string (`postgres://`, `mysql://`) and prefill the form                                                | MVP     |
-| C3  | Connections  | Open a SQLite file from the panel as a connection: pick one found in the workspaces or paste a path                      | MVP     |
+| C3  | Connections  | Save a SQLite file as a connection from the connection form: pick one found in the workspaces or paste a path            | MVP     |
 | C4  | Connections  | Worktree connection: read `DATABASE_URL` (or a configurable variable) from each worktree's `.env` / `.env.local` and list it in the panel | MVP     |
 | C5  | Connections  | Environment label (`local`, `dev`, `staging`, `prod`) shown as a colored tab                                              | v1      |
 | C6  | Connections  | SSL/TLS modes and certificates; SSH tunnel                                                                                | v2      |

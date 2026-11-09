@@ -17,7 +17,7 @@ A connection read from a worktree's `.env` each time it is used and never saved 
 _Avoid_: Per-worktree connection, detected connection, env connection
 
 **SQLite file**:
-A `.db`/`.sqlite` file on disk that the person opens as a connection.
+A `.db`/`.sqlite` file on disk that the person saves as a connection, by path, from the connection form.
 _Avoid_: Local database, embedded database
 
 **Query document**:

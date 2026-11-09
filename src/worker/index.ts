@@ -1,5 +1,5 @@
 import type { OrcaWorkerApi } from 'orca/worker'
-import { CHOOSER_REQUEST_KEY } from '../protocol'
+import { SQLITE_FORM_REQUEST_KEY } from '../protocol'
 import { type Connections, createConnections } from './connections'
 import { openTable } from './documents'
 import { RESULT_CEILING_ROWS } from './query-engine'
@@ -23,19 +23,14 @@ export default function activate(orca: OrcaWorkerApi): void {
   connections = registry
   orca.panels.handle('connections.list', () => registry.list())
   orca.panels.handle('sqlite.findFiles', async () => ({ files: await findSqliteFiles(orca) }))
-  orca.panels.handle('sqlite.add', ({ path }) => registry.addSqliteFile(path.trim()))
-  orca.panels.handle('sqlite.remove', async ({ path }) => {
-    await registry.removeSqliteFile(path)
-    return {}
-  })
-  orca.panels.handle('connection.save', (input) => registry.saveServer(input))
+  orca.panels.handle('connection.save', (input) => registry.save(input))
   orca.panels.handle('connection.test', async (input) => {
-    await registry.testServer(input)
+    await registry.test(input)
     return {}
   })
-  orca.panels.handle('connection.get', ({ ref }) => registry.getServer(ref))
+  orca.panels.handle('connection.get', ({ ref }) => registry.get(ref))
   orca.panels.handle('connection.delete', async ({ ref }) => {
-    await registry.deleteServer(ref)
+    await registry.delete(ref)
     return {}
   })
   orca.panels.handle('explorer.listObjects', ({ ref }) => registry.listObjects(ref))
@@ -71,9 +66,9 @@ export default function activate(orca: OrcaWorkerApi): void {
   // Workers cannot open a panel: an open panel hears the event, a closed one finds the request in
   // storage when it opens. X3
   orca.commands.register('db-studio.openSqliteFile', async () => {
-    await orca.storage.set(CHOOSER_REQUEST_KEY, true)
-    orca.panels.post('sqlite.chooserRequested', {})
-    return 'Choose a SQLite file in the DB Studio panel.'
+    await orca.storage.set(SQLITE_FORM_REQUEST_KEY, true)
+    orca.panels.post('sqlite.formRequested', {})
+    return 'Add the SQLite file in the DB Studio panel.'
   })
 }
 

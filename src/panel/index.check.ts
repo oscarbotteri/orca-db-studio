@@ -1,6 +1,6 @@
 // Seam C: render checks for the panel. Visual only; the worker's answers are stand-ins.
 import { defineCheck } from 'orca/testing'
-import { CHOOSER_REQUEST_KEY, type ConnectionEntry, type SchemaTree } from '../protocol'
+import { type ConnectionEntry, type SchemaTree, SQLITE_FORM_REQUEST_KEY } from '../protocol'
 import type { FormDraft } from './connection-form-state'
 import { connectionKey, schemaKey } from './state'
 
@@ -8,17 +8,27 @@ const SHOP: ConnectionEntry = {
   ref: '/Users/dev/api/data/shop.db',
   name: 'shop.db',
   detail: 'data',
+  origin: 'saved',
 }
 const ANALYTICS: ConnectionEntry = {
   ref: '/Users/dev/reports/analytics.sqlite3',
   name: 'analytics.sqlite3',
   detail: 'reports',
+  origin: 'saved',
 }
 
 const SHOP_DB: ConnectionEntry = {
   ref: 'c1',
   name: 'Shop DB',
   detail: 'app@db.internal:5432/shop',
+  origin: 'saved',
+}
+
+const API_WORKTREE: ConnectionEntry = {
+  ref: 'env:DATABASE_URL:id-api',
+  name: 'api',
+  detail: 'app@localhost:5432/api_dev',
+  origin: 'worktree',
 }
 
 const FILLED_FORM: FormDraft = {
@@ -30,6 +40,7 @@ const FILLED_FORM: FormDraft = {
   port: '5432',
   database: 'shop',
   user: 'app',
+  path: '',
   notice: null,
 }
 
@@ -59,9 +70,11 @@ const FOUND_FILES = {
   ],
 }
 
+const ALL = { saved: [ANALYTICS, SHOP_DB, SHOP], worktrees: [API_WORKTREE] }
+
 export default defineCheck({
   empty: {
-    requests: { 'connections.list': { sqliteFiles: [], servers: [], worktrees: [] } },
+    requests: { 'connections.list': { saved: [], worktrees: [] } },
   },
   tree: {
     persisted: {
@@ -69,42 +82,35 @@ export default defineCheck({
         'explorer-expanded': [connectionKey(SHOP.ref), schemaKey(SHOP.ref, 'main')],
       },
     },
-    requests: {
-      'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [], worktrees: [] },
-      'explorer.listObjects': SHOP_TREE,
-    },
+    requests: { 'connections.list': ALL, 'explorer.listObjects': SHOP_TREE },
   },
-  'remove-file': {
-    persisted: { plugin: { 'sqlite-removal': { entry: SHOP, error: null } } },
-    requests: {
-      'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [], worktrees: [] },
-    },
-  },
-  'remove-file-dark': {
+  'tree-dark': {
     theme: 'dark',
-    persisted: { plugin: { 'sqlite-removal': { entry: SHOP, error: null } } },
-    requests: {
-      'connections.list': { sqliteFiles: [SHOP, ANALYTICS], servers: [], worktrees: [] },
-    },
+    requests: { 'connections.list': ALL },
   },
-  chooser: {
-    storage: { [CHOOSER_REQUEST_KEY]: true },
-    requests: {
-      'connections.list': { sqliteFiles: [SHOP], servers: [], worktrees: [] },
-      'sqlite.findFiles': FOUND_FILES,
-    },
+  'sqlite-form': {
+    storage: { [SQLITE_FORM_REQUEST_KEY]: true },
+    requests: { 'connections.list': ALL, 'sqlite.findFiles': FOUND_FILES },
   },
-  'chooser-dark': {
+  'sqlite-edit-dark': {
     theme: 'dark',
-    storage: { [CHOOSER_REQUEST_KEY]: true },
-    requests: {
-      'connections.list': { sqliteFiles: [], servers: [], worktrees: [] },
-      'sqlite.findFiles': { files: [] },
+    persisted: {
+      plugin: {
+        'connection-form': {
+          ...FILLED_FORM,
+          ref: SHOP.ref,
+          hasPassword: false,
+          name: SHOP.name,
+          engine: 'sqlite',
+          path: SHOP.ref,
+        },
+      },
     },
+    requests: { 'connections.list': ALL },
   },
   form: {
     persisted: { plugin: { 'connection-form': FILLED_FORM } },
-    requests: { 'connections.list': { sqliteFiles: [], servers: [SHOP_DB], worktrees: [] } },
+    requests: { 'connections.list': ALL },
   },
   'form-error': {
     theme: 'dark',
@@ -119,6 +125,6 @@ export default defineCheck({
         },
       },
     },
-    requests: { 'connections.list': { sqliteFiles: [], servers: [SHOP_DB], worktrees: [] } },
+    requests: { 'connections.list': ALL },
   },
 })

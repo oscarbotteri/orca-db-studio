@@ -3,18 +3,21 @@ import type { SchemaTree, SqlDialect } from './drivers'
 
 export type { DbObject, SchemaNode, SchemaTree, SqlDialect } from './drivers'
 
+/** Saved by the person in DB Studio, or read from a worktree's .env on every use. */
+export type ConnectionOrigin = 'saved' | 'worktree'
+
 /** A connection as the panel lists it; `ref` is what a query document names. */
 export interface ConnectionEntry {
   ref: string
   name: string
   /** Where it points, short enough to sit beside the name. */
   detail: string
+  origin: ConnectionOrigin
 }
 
 export interface ConnectionList {
-  sqliteFiles: ConnectionEntry[]
-  /** Saved connections to a database server. */
-  servers: ConnectionEntry[]
+  /** Server connections and SQLite files, by name. */
+  saved: ConnectionEntry[]
   /** One per local workspace whose .env defines the connection variable; named for the workspace. */
   worktrees: ConnectionEntry[]
 }
@@ -22,8 +25,8 @@ export interface ConnectionList {
 /** The server engines the connection form offers. */
 export type ServerEngine = 'postgres' | 'mysql'
 
-/** What the connection form edits; the password travels beside it and is never stored here. */
-export interface ConnectionForm {
+/** What the connection form edits for a server; the password travels beside it, never in it. */
+export interface ServerForm {
   name: string
   engine: ServerEngine
   host: string
@@ -31,6 +34,15 @@ export interface ConnectionForm {
   database: string
   user: string
 }
+
+/** What the connection form edits for a SQLite file: an absolute path. */
+export interface SqliteForm {
+  name: string
+  engine: 'sqlite'
+  path: string
+}
+
+export type ConnectionForm = ServerForm | SqliteForm
 
 export interface SavedConnection {
   form: ConnectionForm
@@ -72,16 +84,13 @@ export interface CellValue {
   cut: boolean
 }
 
-/** Storage key the "Open SQLite File" command sets so the panel shows the chooser. */
-export const CHOOSER_REQUEST_KEY = 'sqlite-chooser-requested'
+/** Storage key the "Open SQLite File" command sets so the panel opens the form on SQLite. */
+export const SQLITE_FORM_REQUEST_KEY = 'sqlite-form-requested'
 
 declare module 'orca' {
   interface PluginRequests {
     'connections.list': { output: ConnectionList }
     'sqlite.findFiles': { output: { files: FoundSqliteFile[] } }
-    'sqlite.add': { input: { path: string }; output: ConnectionEntry }
-    /** Forgets the file; it is never touched on disk. Rejects when the path is not stored. */
-    'sqlite.remove': { input: { path: string }; output: Record<string, never> }
     /** `password` unset keeps the stored one when editing; without `ref` a new connection is made. */
     'connection.save': {
       input: { ref?: string; form: ConnectionForm; password?: string }
@@ -93,6 +102,7 @@ declare module 'orca' {
       output: Record<string, never>
     }
     'connection.get': { input: { ref: string }; output: SavedConnection }
+    /** A SQLite file is only forgotten; it is never touched on disk. */
     'connection.delete': { input: { ref: string }; output: Record<string, never> }
     'explorer.listObjects': { input: { ref: string }; output: SchemaTree }
     /** Without `workspaceId` the worker picks the focused workspace or asks to choose one. */
@@ -115,7 +125,7 @@ declare module 'orca' {
   }
   interface PluginPanelEvents {
     'connections.changed': Record<string, never>
-    /** The "Open SQLite File" command ran; an open panel shows the chooser at once. */
-    'sqlite.chooserRequested': Record<string, never>
+    /** The "Open SQLite File" command ran; an open panel opens the form on SQLite at once. */
+    'sqlite.formRequested': Record<string, never>
   }
 }
