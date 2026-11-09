@@ -3,17 +3,16 @@ import { basename, dirname, isAbsolute, normalize } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import type { ConnectionConfig } from '../drivers'
 import { ENVIRONMENTS, TONES } from '../environment-label'
-import type {
-  ConnectionEntry,
-  ConnectionForm,
-  Environment,
-  SavedConnection,
-  ServerForm,
-  Tone,
+import {
+  type ConnectionEntry,
+  type ConnectionForm,
+  type Environment,
+  SAVED_CONNECTIONS_KEY,
+  type SavedConnection,
+  type ServerForm,
+  type Tone,
 } from '../protocol'
 
-/** Named before SQLite files joined the registry; renaming it would lose every saved connection. */
-const SAVED_KEY = 'server-connections'
 /** Where v0.2.0 kept SQLite files, as bare paths. Read once and folded into the registry. */
 const LEGACY_SQLITE_KEY = 'sqlite-files'
 
@@ -63,7 +62,7 @@ function exclusive<T>(task: () => Promise<T>): Promise<T> {
 
 /** Call only inside `exclusive`: it may write the registry while migrating. */
 async function stored(orca: OrcaWorkerApi): Promise<StoredConnection[]> {
-  const value = await orca.storage.get(SAVED_KEY)
+  const value = await orca.storage.get(SAVED_CONNECTIONS_KEY)
   const saved = Array.isArray(value) ? value.filter(isStored) : []
   const legacy = await orca.storage.get(LEGACY_SQLITE_KEY)
   if (!Array.isArray(legacy)) return saved
@@ -71,7 +70,7 @@ async function stored(orca: OrcaWorkerApi): Promise<StoredConnection[]> {
   const paths = legacy.filter((p): p is string => typeof p === 'string' && !known.has(p))
   const merged = [...saved, ...paths.map(legacySqlite)]
   // The registry is written first: a failure in between leaves both, and the next read merges again.
-  await orca.storage.set(SAVED_KEY, merged)
+  await orca.storage.set(SAVED_CONNECTIONS_KEY, merged)
   await orca.storage.delete(LEGACY_SQLITE_KEY)
   return merged
 }
@@ -219,7 +218,7 @@ async function save(
   const next: StoredConnection = { id, ...form }
   try {
     await orca.storage.set(
-      SAVED_KEY,
+      SAVED_CONNECTIONS_KEY,
       input.ref ? all.map((c) => (c.id === id ? next : c)) : [...all, next],
     )
   } catch (error) {
@@ -243,7 +242,7 @@ async function deleteStored(orca: OrcaWorkerApi, ref: string): Promise<void> {
   const all = await stored(orca)
   if (!all.some((c) => c.id === ref)) throw new Error(`No connection ${ref}`)
   await orca.storage.set(
-    SAVED_KEY,
+    SAVED_CONNECTIONS_KEY,
     all.filter((c) => c.id !== ref),
   )
   // The entry is already gone; a secrets store that refuses to delete must not hide that.

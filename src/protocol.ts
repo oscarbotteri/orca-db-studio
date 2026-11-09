@@ -100,6 +100,12 @@ export interface CellValue {
   cut: boolean
 }
 
+/**
+ * Storage key of the saved-connection registry. Named before SQLite files joined it; renaming it
+ * would lose every saved connection. Frames watch it to learn that a label changed.
+ */
+export const SAVED_CONNECTIONS_KEY = 'server-connections'
+
 /** Storage key the "Open SQLite File" command sets so the panel opens the form on SQLite. */
 export const SQLITE_FORM_REQUEST_KEY = 'sqlite-form-requested'
 

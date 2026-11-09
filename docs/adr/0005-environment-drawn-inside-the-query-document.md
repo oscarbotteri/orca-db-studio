@@ -14,7 +14,7 @@ Orca's plugin API offers no way to color, rename or decorate an editor tab, and 
 - The "colored tab" is drawn inside the query document: a 4 px band across its top and a `[env] Name` badge in its toolbar, both in the connection's tone. A connection without an environment shows its name in a neutral tone and no band.
 - The label is informational. There is no confirmation, no read-only mode, and Run behaves the same for every environment; guard rails are a non-goal of the PRD.
 - Neutral and danger use Orca's `--orca-muted-foreground` and `--orca-destructive`. Accent, success and warning use a palette per `light` / `dark` class on `<html>`, each at 4.5:1 or better on the backgrounds themes use, as the SQL syntax palette does.
-- An open document follows the registry: it lists connections again on the worker's `connections.changed` event, and on every edit of its first line.
+- An open document follows the registry: it lists connections again on the worker's `connections.changed` event and on a write to the registry's storage key, and looks once more when its first line names a connection it does not know. Only the latest answer is applied.
 
 ## Alternatives considered
 
@@ -25,5 +25,5 @@ Orca's plugin API offers no way to color, rename or decorate an editor tab, and 
 ## Consequences
 
 - The label is visible only once the document is open and focused; Orca's tab strip and the panel tree cannot carry a color. The panel marks the environment in the row's text instead.
-- If Orca does not deliver `connections.changed` to editor frames, an edited label reaches an open document on reopen.
+- Neither the event nor the storage change is confirmed to reach editor frames. If neither does, an edited label reaches an open document on reopen.
 - Reopen if Orca lets plugins decorate editor tabs.

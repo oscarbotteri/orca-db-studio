@@ -27,10 +27,13 @@ export function createConnectionChooser(
   select.setAttribute('aria-label', 'Choose connection')
   select.disabled = disabled
   function fill(listed: ConnectionEntry[]): void {
+    const kept = select.value
     select.replaceChildren(
       new Option('Choose connection', ''),
       ...listed.map((entry) => new Option(optionText(entry), entry.ref)),
     )
+    // A choice still on offer stays chosen: the registry changing must not undo it.
+    if (listed.some((entry) => entry.ref === kept)) select.value = kept
   }
   fill(entries)
   select.addEventListener('change', () => {

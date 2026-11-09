@@ -1,6 +1,7 @@
 // What a query document's toolbar and band say about its connection. C5
 import { describe, expect, test } from 'vitest'
-import { badgeModel } from '../../src/editor/environment-badge'
+import { BADGE_STYLE, badgeModel } from '../../src/editor/environment-badge'
+import { TONES } from '../../src/environment-label'
 import type { ConnectionEntry } from '../../src/protocol'
 
 const BILLING: ConnectionEntry = {
@@ -40,5 +41,11 @@ describe('badgeModel', () => {
 
   test('nothing is shown while the document names no known connection', () => {
     expect(badgeModel(undefined)).toBeUndefined()
+  })
+})
+
+describe('BADGE_STYLE', () => {
+  test('styles every tone the form offers', () => {
+    for (const tone of TONES) expect(BADGE_STYLE).toContain(`.tone-${tone} {`)
   })
 })

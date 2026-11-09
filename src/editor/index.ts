@@ -1,5 +1,5 @@
 // Query document editor: a custom editor for .sql files. Q1, G1, ADR 0003
-import type { ConnectionEntry, SqlDialect } from '../protocol'
+import { type ConnectionEntry, SAVED_CONNECTIONS_KEY, type SqlDialect } from '../protocol'
 import { createConnectionChooser } from './connection-chooser'
 import { chooserState, connectionEntries } from './connection-state'
 import { BADGE_STYLE, createEnvironmentBadge } from './environment-badge'
@@ -105,8 +105,21 @@ try {
 }
 
 /** The band and badge follow the connection the document's first line names, as the registry has it now. */
-function showConnection(named: string | undefined): void {
+function renderConnection(named: string | undefined): void {
   environmentBadge.show(entries?.find((entry) => entry.ref === named))
+}
+
+/** The last name the registry did not know, so a missing connection is looked for once, not per key. */
+let missed: string | undefined
+
+function showConnection(named: string | undefined): void {
+  renderConnection(named)
+  const known = entries?.some((entry) => entry.ref === named)
+  if (known) missed = undefined
+  if (known || named === undefined || named === missed) return
+  // Saved after this document opened, or the first list failed: the registry may know it now.
+  missed = named
+  void reloadEntries()
 }
 
 const { needsChoice, notice } = chooserState(ref, entries, doc.readOnly)
@@ -171,18 +184,32 @@ chooser.element.hidden = connected
 chooser.setNotice(notice)
 toolbar.after(chooser.element)
 
-/** A saved connection was edited or deleted in the panel: its label changes in this document too. */
+/**
+ * A saved connection was edited or deleted in the panel: its label changes in this document too.
+ * Two signals, since Orca may not deliver the worker's event to an editor frame: the registry's
+ * own storage key also reports the write.
+ */
 orca.plugin.on('connections.changed', () => void reloadEntries())
+orca.storage.onDidChange(({ key }) => {
+  if (key === SAVED_CONNECTIONS_KEY) void reloadEntries()
+})
+
+/** Only the latest reload may land: an earlier, slower answer is stale by then. */
+let latestReload = 0
 
 async function reloadEntries(): Promise<void> {
+  const mine = ++latestReload
+  let listed: ConnectionEntry[]
   try {
-    entries = connectionEntries(await orca.plugin.request('connections.list'))
+    listed = connectionEntries(await orca.plugin.request('connections.list'))
   } catch {
     // The list this document already has still stands.
     return
   }
-  chooser.setEntries(entries)
-  showConnection(connectionRef(editor.text()))
+  if (mine !== latestReload) return
+  entries = listed
+  chooser.setEntries(listed)
+  renderConnection(connectionRef(editor.text()))
 }
 
 async function execute(): Promise<void> {
