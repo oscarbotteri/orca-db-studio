@@ -10,6 +10,8 @@ export interface ParsedConnectionString {
   database: string
   user: string
   password: string
+  /** SSL requested by the URL's sslmode; absent when the URL says nothing about it. */
+  ssl?: boolean
 }
 
 const SCHEMES: Record<string, ServerEngine> = {
@@ -36,6 +38,7 @@ export function parseConnectionString(text: string): ParsedConnectionString | un
   }
   const engine = SCHEMES[url.protocol]
   if (!engine || !url.hostname) return undefined
+  const sslmode = url.searchParams.get('sslmode')
   return {
     engine,
     host: decode(url.hostname.replace(/^\[(.*)\]$/, '$1')),
@@ -43,5 +46,8 @@ export function parseConnectionString(text: string): ParsedConnectionString | un
     database: decode(url.pathname.replace(/^\//, '')),
     user: decode(url.username),
     password: decode(url.password),
+    // sslmode=disable turns SSL off; any other value (require, prefer, verify-*) turns it on.
+    // When sslmode is absent the field stays undefined so the driver can decide.
+    ssl: sslmode == null ? undefined : sslmode !== 'disable',
   }
 }

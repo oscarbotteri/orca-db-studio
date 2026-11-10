@@ -168,7 +168,7 @@ export function chooseFoundFile(file: FoundSqliteFile): void {
 export function pasteConnectionString(text: string): void {
   const parsed = parseConnectionString(text)
   if (!parsed) return
-  const { password, port, ...fields } = parsed
+  const { password, port, ssl: _ssl, ...fields } = parsed
   // A string without a user or database must not wipe what the person typed.
   const present = Object.entries(fields).filter(([, value]) => value !== '')
   editDraft({ ...Object.fromEntries(present), port: String(port) })

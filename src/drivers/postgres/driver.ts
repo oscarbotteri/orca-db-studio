@@ -247,13 +247,28 @@ class PostgresSession implements Session {
   }
 }
 
+/**
+ * Managed cloud Postgres (AWS RDS/Aurora, Azure, GCP, Supabase, Neon, Timescale, Render…) refuses
+ * an unencrypted connection through pg_hba, reporting "no pg_hba.conf entry … no encryption".
+ * Default such hosts to SSL so they connect out of the box; a URL's sslmode still overrides this.
+ */
+function hostNeedsSsl(host: string): boolean {
+  return /(?:\.rds\.amazonaws\.com|\.postgres\.database\.azure\.com|\.supabase\.co|\.neon\.tech|\.cloud\.timescale\.com|\.render\.com)$/i.test(
+    host,
+  )
+}
+
 function clientConfig(config: PostgresConfig, secret: string | undefined): ClientConfig {
+  const ssl = config.ssl ?? hostNeedsSsl(config.host)
   return {
     host: config.host,
     port: config.port,
     database: config.database,
     user: config.user,
     password: secret,
+    // rejectUnauthorized:false encrypts the connection without requiring the server's CA locally,
+    // which matches how a desktop client reaches a managed database.
+    ssl: ssl ? { rejectUnauthorized: false } : undefined,
   }
 }
 
