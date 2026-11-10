@@ -62,7 +62,7 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 - PostgreSQL, MySQL/MariaDB and SQLite, from a form or a pasted connection string (`postgres://`, `mysql://`).
 - Test, edit and delete saved connections.
 - SQLite files saved as connections from the same form, picked from those found in your workspaces or pasted by path.
-- Tag a connection with an environment (local, dev, staging, prod). Its query documents show a colored band and a badge in the toolbar, and the panel row names it.
+- Tag a saved connection with an environment (local, dev, staging, prod). Its query documents show a colored band and a badge in the toolbar, and the panel row names it. Worktree connections cannot be tagged.
 - Worktree connections read from each workspace's `.env` / `.env.local`.
 
 **Explorer**
