@@ -41,7 +41,7 @@ It works the same on **PostgreSQL**, **MySQL/MariaDB** and **SQLite**.
 ## How it works
 
 1. Open the **DB Studio** panel in Orca's sidebar.
-2. Pick a connection: one you saved, a SQLite file found in your workspaces, or a worktree connection read from a `.env`.
+2. Pick a connection: one you saved (a server or a SQLite file), or a worktree connection read from a `.env`.
 3. Expand it into databases, schemas, tables and views.
 4. Click a table. A query document opens with `SELECT * FROM <table> LIMIT 100` and runs it.
 5. Edit the SQL, run the statement under the cursor (or the selection) with <kbd>Cmd/Ctrl</kbd>+<kbd>Enter</kbd>, and read the result in the grid below.
@@ -61,7 +61,8 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 
 - PostgreSQL, MySQL/MariaDB and SQLite, from a form or a pasted connection string (`postgres://`, `mysql://`).
 - Test, edit and delete saved connections.
-- SQLite files discovered in your workspaces, or any absolute path.
+- SQLite files saved as connections from the same form, picked from those found in your workspaces or pasted by path.
+- Tag a connection with an environment (local, dev, staging, prod). Its query documents show a colored band and a badge in the toolbar, and the panel row names it.
 - Worktree connections read from each workspace's `.env` / `.env.local`.
 
 **Explorer**
@@ -72,6 +73,7 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 **Query editor**
 
 - SQL editor with dialect-aware highlighting ([CodeMirror 6](docs/adr/0001-sql-editor-codemirror.md)).
+- Autocomplete for tables, columns and keywords from the live schema.
 - Run the statement under the cursor or the selection.
 - Cancel a running query. It stops in the database, not only in the UI.
 - Configurable timeout (30 s by default, 110 s at most).
@@ -100,7 +102,7 @@ A few of the things planned after the [MVP](https://github.com/oscarbotteri/orca
 
 | Version                                                              | Highlights                                                                                                                                                                                                                        |
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[v1](https://github.com/oscarbotteri/orca-db-studio/milestone/2)** | Autocomplete from the live schema (`Q2`) · MCP server so agents can query read-only (`A1`, `A2`) · copy results as CSV, JSON, Markdown or `INSERT` (`G4`) · schema page with DDL (`S1`)                                           |
+| **[v1](https://github.com/oscarbotteri/orca-db-studio/milestone/2)** | MCP server so agents can query read-only (`A1`, `A2`) · copy results as CSV, JSON, Markdown or `INSERT` (`G4`) · schema page with DDL (`S1`)                                                                                      |
 | **[v2](https://github.com/oscarbotteri/orca-db-studio/milestone/3)** | Edit cells and rows as a draft with SQL preview (`D1`, `D2`) · agent writes with explicit approval (`A3`) · activity log of what agents ran (`A4`) · sort, filter and export from the grid (`G2`, `G5`) · virtualized grid (`G6`) |
 | **[v3](https://github.com/oscarbotteri/orca-db-studio/milestone/4)** | ER diagram (`S2`) · `EXPLAIN` visualizer (`S3`) · open `psql` / `mysql` in an Orca terminal (`X2`)                                                                                                                                |
 

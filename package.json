@@ -1,6 +1,6 @@
 {
   "name": "db-studio",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "DB Studio for Orca: PostgreSQL, MySQL/MariaDB and SQLite from an editor tab, with safe agent access over MCP.",
   "private": true,
   "type": "module",
