@@ -41,6 +41,10 @@ async function bundle({ name, kind }) {
     platform: worker ? 'node' : 'browser',
     target: worker ? 'node24' : 'es2022',
     minify: true,
+    // Keep non-ASCII text as written. By default esbuild escapes it, which turns iconv-lite's
+    // codepage tables (bundled by mysql2) into long `\xNN` runs that read as obfuscated code to
+    // reviewers and to the Orca plugin directory's scanner. Node reads ESM source as UTF-8.
+    charset: worker ? 'utf8' : 'ascii',
     legalComments: 'none',
     metafile: true,
     logLevel: 'warning',

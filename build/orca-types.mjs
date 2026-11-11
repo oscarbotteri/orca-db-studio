@@ -3,7 +3,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const ORCA_REF = 'bf07b8f60eca8c44b083fd60396a40bdde3d046c'
+const ORCA_REF = '894dbbd0eccf40a566728d3da01f7f26fe3d44fd'
 const RAW = `https://raw.githubusercontent.com/stablyai/orca/${ORCA_REF}/resources/plugins`
 const TYPES_DIR = join(import.meta.dirname, '..', '.orca', 'types')
 const NOTE = '// Fetched by build/orca-types.mjs from stablyai/orca. Do not edit.\n'
