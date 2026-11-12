@@ -153,6 +153,7 @@ Findings from the pinned Orca source and the 1.4.251 app; they shape the design 
 | `src/drivers/`       | One folder per engine (`postgres/`, `mysql/`, `sqlite/`), `common/` (seam types), `index.ts` (the only import path, lazy registry) |
 | `src/editor/`        | Query document editor: SQL editor, grid                                     |
 | `src/panel/`         | Connections and explorer                                                    |
+| `src/utils/`         | Language helpers with no domain knowledge, for any part (`assertNever`)     |
 | `build/` → `vendor/` | Driver and editor bundles, license notices                                  |
 | `test/`              | Driver tests against real databases + UI tests                              |
 

@@ -2,7 +2,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
-import type { OpenTableResult } from '../protocol'
+import type { OpenDocumentResult } from '../protocol'
 import type { Connections } from './connections'
 import { type LocalWorkspace, listLocalWorkspaces } from './local-workspaces'
 import { parseWorktreeRef } from './worktree-connections'
@@ -31,15 +31,34 @@ async function focusedWorkspace(
   return matches.length === 1 ? matches[0] : undefined
 }
 
+/**
+ * The asked-for workspace, else the focused one, else the only local one. Undefined means the
+ * person has to choose, which only happens when there are several.
+ */
 async function targetWorkspace(
   orca: OrcaWorkerApi,
   workspaces: LocalWorkspace[],
   workspaceId: string | undefined,
 ): Promise<LocalWorkspace | undefined> {
-  if (workspaceId === undefined) return focusedWorkspace(orca, workspaces)
-  const chosen = workspaces.find((w) => w.id === workspaceId)
-  if (!chosen) throw new Error('That workspace is no longer open')
-  return chosen
+  if (workspaceId !== undefined) {
+    const chosen = workspaces.find((w) => w.id === workspaceId)
+    if (!chosen) throw new Error('That workspace is no longer open')
+    return chosen
+  }
+  const focused = await focusedWorkspace(orca, workspaces)
+  if (focused) return focused
+  return workspaces.length === 1 ? workspaces[0] : undefined
+}
+
+/** The local workspaces, throwing when there is none: a query document needs one to live in. */
+async function nonEmptyLocalWorkspaces(orca: OrcaWorkerApi): Promise<LocalWorkspace[]> {
+  const workspaces = await listLocalWorkspaces(orca)
+  if (workspaces.length === 0) {
+    throw new Error(
+      'DB Studio needs a local workspace. Open a folder or worktree on this machine, then try again.',
+    )
+  }
+  return workspaces
 }
 
 function fileStem(table: string): string {
@@ -69,18 +88,14 @@ async function queryFolder(workspace: LocalWorkspace): Promise<string> {
   return dir
 }
 
-export async function openTable(
+/** Writes a query document in the target workspace and opens it, or lists the workspaces to choose. */
+async function openDocument(
   orca: OrcaWorkerApi,
-  connections: Connections,
-  input: OpenTableInput,
-): Promise<OpenTableResult> {
-  const workspaces = await listLocalWorkspaces(orca)
-  if (workspaces.length === 0) throw new Error('Open a workspace to open a table')
-
-  const schema = await connections.quoteIdent(input.ref, input.schema)
-  const table = await connections.quoteIdent(input.ref, input.table)
-  // A worktree connection's document belongs in the worktree the connection was read from.
-  const workspaceId = input.workspaceId ?? parseWorktreeRef(input.ref)?.workspaceId
+  workspaceId: string | undefined,
+  stem: string,
+  content: string,
+): Promise<OpenDocumentResult> {
+  const workspaces = await nonEmptyLocalWorkspaces(orca)
   const target = await targetWorkspace(orca, workspaces, workspaceId)
   if (!target) {
     return {
@@ -89,22 +104,30 @@ export async function openTable(
     }
   }
 
-  const name = await writeDocument(
-    await queryFolder(target),
+  const name = await writeDocument(await queryFolder(target), stem, content)
+  const path = `${FOLDER}/${name}`
+  await orca.host.call('editor.open', { workspaceId: target.id, path })
+  return { status: 'opened', path, workspaceName: target.name }
+}
+
+export async function openTable(
+  orca: OrcaWorkerApi,
+  connections: Connections,
+  input: OpenTableInput,
+): Promise<OpenDocumentResult> {
+  const schema = await connections.quoteIdent(input.ref, input.schema)
+  const table = await connections.quoteIdent(input.ref, input.table)
+  // A worktree connection's document belongs in the worktree the connection was read from.
+  const workspaceId = input.workspaceId ?? parseWorktreeRef(input.ref)?.workspaceId
+  return openDocument(
+    orca,
+    workspaceId,
     fileStem(input.table),
     `-- db-studio: connection=${input.ref}\nSELECT * FROM ${schema}.${table} LIMIT ${TABLE_QUERY_LIMIT}\n`,
   )
-  const path = `${FOLDER}/${name}`
-  await orca.host.call('editor.open', { workspaceId: target.id, path })
-  return { status: 'opened', path }
 }
 
-/** An empty query document in the focused workspace; the editor then asks for its connection. X1 */
-export async function newQuery(orca: OrcaWorkerApi): Promise<string> {
-  const workspace = await focusedWorkspace(orca, await listLocalWorkspaces(orca))
-  if (!workspace) throw new Error('Focus a workspace to create a query')
-  const name = await writeDocument(await queryFolder(workspace), 'query', '')
-  const path = `${FOLDER}/${name}`
-  await orca.host.call('editor.open', { workspaceId: workspace.id, path })
-  return path
+/** An empty query document; the editor then asks for its connection. X1 */
+export function newQuery(orca: OrcaWorkerApi, workspaceId?: string): Promise<OpenDocumentResult> {
+  return openDocument(orca, workspaceId, 'query', '')
 }

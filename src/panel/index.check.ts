@@ -1,6 +1,12 @@
 // Seam C: render checks for the panel. Visual only; the worker's answers are stand-ins.
 import { defineCheck } from 'orca/testing'
-import { type ConnectionEntry, type SchemaTree, SQLITE_FORM_REQUEST_KEY } from '../protocol'
+import {
+  type ConnectionEntry,
+  NEW_QUERY_REQUEST_KEY,
+  type SchemaTree,
+  SQLITE_FORM_REQUEST_KEY,
+  type WorkspaceChoice,
+} from '../protocol'
 import type { FormDraft } from './connection-form-state'
 import { connectionKey, schemaKey } from './state'
 
@@ -75,6 +81,11 @@ const FOUND_FILES = {
 
 const ALL = { saved: [ANALYTICS, SHOP_DB, SHOP], worktrees: [API_WORKTREE] }
 
+const WORKSPACES: WorkspaceChoice[] = [
+  { id: 'id-api', name: 'api' },
+  { id: 'id-web', name: 'web' },
+]
+
 export default defineCheck({
   empty: {
     requests: { 'connections.list': { saved: [], worktrees: [] } },
@@ -89,6 +100,15 @@ export default defineCheck({
   },
   'tree-dark': {
     theme: 'dark',
+    requests: { 'connections.list': ALL },
+  },
+  'new-query-picker': {
+    storage: { [NEW_QUERY_REQUEST_KEY]: WORKSPACES },
+    requests: { 'connections.list': ALL },
+  },
+  'new-query-picker-dark': {
+    theme: 'dark',
+    storage: { [NEW_QUERY_REQUEST_KEY]: WORKSPACES },
     requests: { 'connections.list': ALL },
   },
   'sqlite-form': {

@@ -1,6 +1,14 @@
 // Panel state and the worker requests that change it.
-import { atom, plugin, read, set, update } from 'orca'
-import type { ConnectionList, FoundSqliteFile, SchemaTree, WorkspaceChoice } from '../protocol'
+import { atom, derived, plugin, read, set, update } from 'orca'
+import {
+  type ConnectionList,
+  type FoundSqliteFile,
+  NEW_QUERY_REQUEST_KEY,
+  type OpenDocumentResult,
+  type SchemaTree,
+  type WorkspaceChoice,
+} from '../protocol'
+import { assertNever } from '../utils/assert-never'
 
 export type Loadable<T> =
   | { status: 'loading' }
@@ -100,39 +108,90 @@ export interface TableRef {
   table: string
 }
 
-/** A table waiting for the person to say which workspace gets its query document. */
+/** What waits for the person to say which workspace gets its query document. */
+export type WorkspaceAction = { kind: 'table'; table: TableRef } | { kind: 'new-query' }
+
 export interface WorkspaceQuestion {
-  table: TableRef
+  action: WorkspaceAction
   workspaces: WorkspaceChoice[]
 }
 
-export const workspaceQuestion = atom<WorkspaceQuestion | null>(null)
-export const openError = atom<string | null>(null)
+/** Why a query document could not be opened, under a title naming what was asked. */
+export interface OpenError {
+  title: string
+  text: string
+}
+
+const tableQuestion = atom<WorkspaceQuestion | null>(null)
+/** Set by the "New Query" command through storage, so a closed panel still asks once it opens. */
+const newQueryRequest = atom<WorkspaceChoice[] | null>(NEW_QUERY_REQUEST_KEY, null, {
+  persist: 'storage',
+})
+
+export const workspaceQuestion = derived<WorkspaceQuestion | null>(() => {
+  const workspaces = read(newQueryRequest)
+  return workspaces ? { action: { kind: 'new-query' }, workspaces } : read(tableQuestion)
+})
+export const openError = atom<OpenError | null>(null)
 
 let opening = false
 
-export async function openTable(table: TableRef, workspaceId?: string): Promise<void> {
-  // A double press must not write two documents.
+/** Runs one request that opens a query document; a double press must not write two. */
+async function openDocument(
+  title: string,
+  request: () => Promise<OpenDocumentResult>,
+  onChoose: (workspaces: WorkspaceChoice[]) => void,
+): Promise<void> {
   if (opening) return
   opening = true
   set(openError, null)
   try {
-    const result = await plugin.request('table.open', {
-      ...table,
-      ...(workspaceId === undefined ? {} : { workspaceId }),
-    })
-    set(
-      workspaceQuestion,
-      result.status === 'opened' ? null : { table, workspaces: result.workspaces },
-    )
+    const result = await request()
+    cancelWorkspaceQuestion()
+    if (result.status === 'choose-workspace') onChoose(result.workspaces)
   } catch (error) {
-    set(workspaceQuestion, null)
-    set(openError, errorMessage(error))
+    cancelWorkspaceQuestion()
+    set(openError, { title, text: errorMessage(error) })
   } finally {
     opening = false
   }
 }
 
+export function openTable(table: TableRef, workspaceId?: string): Promise<void> {
+  return openDocument(
+    'Could not open the table',
+    () =>
+      plugin.request('table.open', {
+        ...table,
+        ...(workspaceId === undefined ? {} : { workspaceId }),
+      }),
+    (workspaces) => set(tableQuestion, { action: { kind: 'table', table }, workspaces }),
+  )
+}
+
+function newQuery(workspaceId: string): Promise<void> {
+  return openDocument(
+    'Could not create the query',
+    () => plugin.request('query.new', { workspaceId }),
+    (workspaces) => set(newQueryRequest, workspaces),
+  )
+}
+
+export function answerWorkspaceQuestion(question: WorkspaceQuestion, workspaceId: string): void {
+  const { action } = question
+  switch (action.kind) {
+    case 'table':
+      void openTable(action.table, workspaceId)
+      break
+    case 'new-query':
+      void newQuery(workspaceId)
+      break
+    default:
+      assertNever(action)
+  }
+}
+
 export function cancelWorkspaceQuestion(): void {
-  set(workspaceQuestion, null)
+  set(tableQuestion, null)
+  set(newQueryRequest, null)
 }

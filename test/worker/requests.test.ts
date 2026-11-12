@@ -6,7 +6,7 @@ import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { hostError, mockHost, mountWorker, type TestWorker } from 'orca/testing'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
+import { NEW_QUERY_REQUEST_KEY, SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
 import * as worker from '../../src/worker/index'
 
 let root: string
@@ -428,11 +428,12 @@ async function startWithFocus(
   focus: Focus | null,
   settings = {},
   hostIds: Record<string, string | null> = {},
+  displayNames: Record<string, string> = {},
 ) {
   const listed = names.map((name) => ({
     id: `id-${name}`,
     kind: 'worktree' as const,
-    name,
+    name: displayNames[name] ?? name,
     path: join(root, name),
     branch: 'main',
     hostId: name in hostIds ? hostIds[name] : 'local',
@@ -467,7 +468,11 @@ describe('table.open', () => {
 
     const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual({
+      status: 'opened',
+      path: '.db-studio/orders.sql',
+      workspaceName: 'web',
+    })
     expect(await readFile(join(root, 'web', '.db-studio', 'orders.sql'), 'utf8')).toBe(
       `-- db-studio: connection=${ref}\nSELECT * FROM "main"."orders" LIMIT 100\n`,
     )
@@ -495,13 +500,17 @@ describe('table.open', () => {
     const second = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
     await w.request('table.open', { ref, schema: 'main', table: 'we"ird' })
 
-    expect(second).toEqual({ status: 'opened', path: '.db-studio/orders-2.sql' })
+    expect(second).toEqual({
+      status: 'opened',
+      path: '.db-studio/orders-2.sql',
+      workspaceName: 'api',
+    })
     expect(await readFile(join(root, 'api', '.db-studio', 'we_ird.sql'), 'utf8')).toContain(
       'SELECT * FROM "main"."we""ird" LIMIT 100',
     )
   })
 
-  test('asks the panel to choose when the focused workspace is ambiguous', async () => {
+  test('asks the panel to choose when none of several workspaces is focused', async () => {
     const { host, worker: w } = await startWithFocus(['api', 'web'], null)
     const ref = await shopRef(w)
 
@@ -517,6 +526,41 @@ describe('table.open', () => {
     expect(host.callsOf('editor.open')).toEqual([])
   })
 
+  test('asks to choose between workspaces sharing the focused name and branch', async () => {
+    const { host, worker: w } = await startWithFocus(
+      ['a', 'b'],
+      { branch: 'main', displayName: 'dup' },
+      {},
+      {},
+      { a: 'dup', b: 'dup' },
+    )
+    const ref = await shopRef(w)
+
+    const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(result).toEqual({
+      status: 'choose-workspace',
+      workspaces: [
+        { id: 'id-a', name: 'dup' },
+        { id: 'id-b', name: 'dup' },
+      ],
+    })
+    expect(host.callsOf('editor.open')).toEqual([])
+  })
+
+  test('opens in the only local workspace when none is focused', async () => {
+    const { worker: w } = await startWithFocus(['api'], null)
+    const ref = await shopRef(w)
+
+    const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(result).toEqual({
+      status: 'opened',
+      path: '.db-studio/orders.sql',
+      workspaceName: 'api',
+    })
+  })
+
   test('uses the workspace the person chose', async () => {
     const { worker: w } = await startWithFocus(['api', 'web'], null)
     const ref = await shopRef(w)
@@ -528,7 +572,11 @@ describe('table.open', () => {
       workspaceId: 'id-api',
     })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual({
+      status: 'opened',
+      path: '.db-studio/orders.sql',
+      workspaceName: 'api',
+    })
     expect(await readFile(join(root, 'api', '.db-studio', 'orders.sql'), 'utf8')).toContain(
       'LIMIT 100',
     )
@@ -539,7 +587,7 @@ describe('table.open', () => {
     const ref = await shopRef(w)
 
     await expect(w.request('table.open', { ref, schema: 'main', table: 'orders' })).rejects.toThrow(
-      'Open a workspace to open a table',
+      'DB Studio needs a local workspace',
     )
   })
 
@@ -548,7 +596,7 @@ describe('table.open', () => {
     const ref = await shopRef(w)
 
     await expect(w.request('table.open', { ref, schema: 'main', table: 'orders' })).rejects.toThrow(
-      'Open a workspace to open a table',
+      'DB Studio needs a local workspace',
     )
     expect(host.callsOf('editor.open')).toEqual([])
   })
@@ -564,7 +612,11 @@ describe('table.open', () => {
 
     const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual({
+      status: 'opened',
+      path: '.db-studio/orders.sql',
+      workspaceName: 'api',
+    })
     expect(await readFile(join(root, 'api', '.db-studio', 'orders.sql'), 'utf8')).toContain(
       'LIMIT 100',
     )
@@ -581,7 +633,11 @@ describe('table.open', () => {
 
     const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual({
+      status: 'opened',
+      path: '.db-studio/orders.sql',
+      workspaceName: 'api',
+    })
   })
 
   test('refuses a connection that was never added', async () => {
@@ -590,6 +646,59 @@ describe('table.open', () => {
     await expect(
       w.request('table.open', { ref: '/nope.db', schema: 'main', table: 'orders' }),
     ).rejects.toThrow('No connection /nope.db')
+  })
+})
+
+describe('New Query command', () => {
+  test('opens an empty query document in the focused workspace', async () => {
+    const { host, worker: w } = await startWithFocus(['api', 'web'], {
+      branch: 'main',
+      displayName: 'web',
+    })
+
+    const message = await w.command('db-studio.newQuery')
+
+    expect(message).toBe('Opened .db-studio/query.sql in web. Choose its connection in the editor.')
+    expect(await readFile(join(root, 'web', '.db-studio', 'query.sql'), 'utf8')).toBe('')
+    expect(host.callsOf('editor.open')).toEqual([
+      { workspaceId: 'id-web', path: '.db-studio/query.sql' },
+    ])
+  })
+
+  test('asks the panel to choose when the focused workspace is ambiguous', async () => {
+    const { host, worker: w } = await startWithFocus(
+      ['a', 'b'],
+      { branch: 'main', displayName: 'dup' },
+      {},
+      {},
+      { a: 'dup', b: 'dup' },
+    )
+
+    const message = await w.command('db-studio.newQuery')
+
+    expect(message).toBe('Choose the workspace for the new query in the DB Studio panel.')
+    expect(host.data().storage[NEW_QUERY_REQUEST_KEY]).toEqual([
+      { id: 'id-a', name: 'dup' },
+      { id: 'id-b', name: 'dup' },
+    ])
+    expect(host.callsOf('editor.open')).toEqual([])
+  })
+
+  test('creates the query in the workspace the person chose', async () => {
+    const { worker: w } = await startWithFocus(['api', 'web'], null)
+
+    const result = await w.request('query.new', { workspaceId: 'id-api' })
+
+    expect(result).toEqual({ status: 'opened', path: '.db-studio/query.sql', workspaceName: 'api' })
+    expect(await readFile(join(root, 'api', '.db-studio', 'query.sql'), 'utf8')).toBe('')
+  })
+
+  test('fails clearly when no local workspace is open', async () => {
+    const { worker: w } = await startWithFocus(['remote'], null, {}, { remote: 'ssh' })
+
+    await expect(w.command('db-studio.newQuery')).rejects.toThrow(
+      'DB Studio needs a local workspace',
+    )
   })
 })
 
