@@ -4,10 +4,10 @@ import { describe, expect, test } from 'vitest'
 import * as panel from '../../src/panel/index'
 import {
   type ConnectionEntry,
-  NEW_QUERY_REQUEST_KEY,
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
   type SchemaTree,
   SQLITE_FORM_REQUEST_KEY,
-  type WorkspaceChoice,
 } from '../../src/protocol'
 
 const SHOP: ConnectionEntry = {
@@ -330,14 +330,17 @@ describe('opening a table', () => {
 })
 
 describe('New Query command', () => {
-  const WORKSPACES = [
-    { id: 'id-a', name: 'api' },
-    { id: 'id-b', name: 'web' },
-  ] satisfies WorkspaceChoice[]
+  const NEW_QUERY_QUESTION = {
+    action: { kind: 'new-query' },
+    workspaces: [
+      { id: 'id-a', name: 'api' },
+      { id: 'id-b', name: 'web' },
+    ],
+  } satisfies NewQueryQuestion
 
   async function mountAsked(create: (input: unknown) => unknown) {
     const host = mockHost({
-      storage: { [NEW_QUERY_REQUEST_KEY]: WORKSPACES },
+      storage: { [WORKSPACE_QUESTION_KEY]: NEW_QUERY_QUESTION },
       requests: {
         'connections.list': { saved: [], worktrees: [] },
         'query.new': create as never,
@@ -365,7 +368,7 @@ describe('New Query command', () => {
 
     expect(calls).toEqual([{ workspaceId: 'id-b' }])
     expect(p.find({ text: /New query in which workspace/ })).toBeNull()
-    expect(p.persisted.storage[NEW_QUERY_REQUEST_KEY]).toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toBeNull()
   })
 
   test('stops asking when cancelled', async () => {
@@ -374,7 +377,7 @@ describe('New Query command', () => {
     await p.press({ text: 'Cancel' })
 
     expect(p.find({ text: /New query in which workspace/ })).toBeNull()
-    expect(p.persisted.storage[NEW_QUERY_REQUEST_KEY]).toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toBeNull()
   })
 
   test('shows why the query could not be created', async () => {

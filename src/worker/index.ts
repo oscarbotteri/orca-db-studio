@@ -1,5 +1,10 @@
 import type { OrcaWorkerApi } from 'orca/worker'
-import { NEW_QUERY_REQUEST_KEY, SQLITE_FORM_REQUEST_KEY, type WorkspaceChoice } from '../protocol'
+import {
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
+  SQLITE_FORM_REQUEST_KEY,
+  type WorkspaceChoice,
+} from '../protocol'
 import { type Connections, createConnections } from './connections'
 import { newQuery, openTable } from './documents'
 import { RESULT_CEILING_ROWS } from './query-engine'
@@ -86,10 +91,10 @@ export default function activate(orca: OrcaWorkerApi): void {
 
 /** The panel reads this from storage, so it asks even if it opens after the command ran. */
 function askPanelForWorkspace(orca: OrcaWorkerApi, workspaces: WorkspaceChoice[]): Promise<void> {
-  return orca.storage.set(
-    NEW_QUERY_REQUEST_KEY,
-    workspaces.map(({ id, name }) => ({ id, name })),
-  )
+  return orca.storage.set(WORKSPACE_QUESTION_KEY, {
+    action: { kind: 'new-query' },
+    workspaces: workspaces.map(({ id, name }) => ({ id, name })),
+  } satisfies NewQueryQuestion)
 }
 
 export async function deactivate(): Promise<void> {

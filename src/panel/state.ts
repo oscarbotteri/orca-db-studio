@@ -1,9 +1,10 @@
 // Panel state and the worker requests that change it.
-import { atom, derived, plugin, read, set, update } from 'orca'
+import { atom, plugin, read, set, update } from 'orca'
 import {
   type ConnectionList,
   type FoundSqliteFile,
-  NEW_QUERY_REQUEST_KEY,
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
   type OpenDocumentResult,
   type SchemaTree,
   type WorkspaceChoice,
@@ -109,7 +110,7 @@ export interface TableRef {
 }
 
 /** What waits for the person to say which workspace gets its query document. */
-export type WorkspaceAction = { kind: 'table'; table: TableRef } | { kind: 'new-query' }
+export type WorkspaceAction = { kind: 'table'; table: TableRef } | NewQueryQuestion['action']
 
 export interface WorkspaceQuestion {
   action: WorkspaceAction
@@ -122,15 +123,9 @@ export interface OpenError {
   text: string
 }
 
-const tableQuestion = atom<WorkspaceQuestion | null>(null)
-/** Set by the "New Query" command through storage, so a closed panel still asks once it opens. */
-const newQueryRequest = atom<WorkspaceChoice[] | null>(NEW_QUERY_REQUEST_KEY, null, {
+/** In storage: the "New Query" command asks here too, so a closed panel still asks once it opens. */
+export const workspaceQuestion = atom<WorkspaceQuestion | null>(WORKSPACE_QUESTION_KEY, null, {
   persist: 'storage',
-})
-
-export const workspaceQuestion = derived<WorkspaceQuestion | null>(() => {
-  const workspaces = read(newQueryRequest)
-  return workspaces ? { action: { kind: 'new-query' }, workspaces } : read(tableQuestion)
 })
 export const openError = atom<OpenError | null>(null)
 
@@ -165,7 +160,7 @@ export function openTable(table: TableRef, workspaceId?: string): Promise<void> 
         ...table,
         ...(workspaceId === undefined ? {} : { workspaceId }),
       }),
-    (workspaces) => set(tableQuestion, { action: { kind: 'table', table }, workspaces }),
+    (workspaces) => set(workspaceQuestion, { action: { kind: 'table', table }, workspaces }),
   )
 }
 
@@ -173,7 +168,7 @@ function newQuery(workspaceId: string): Promise<void> {
   return openDocument(
     'Could not create the query',
     () => plugin.request('query.new', { workspaceId }),
-    (workspaces) => set(newQueryRequest, workspaces),
+    (workspaces) => set(workspaceQuestion, { action: { kind: 'new-query' }, workspaces }),
   )
 }
 
@@ -192,6 +187,5 @@ export function answerWorkspaceQuestion(question: WorkspaceQuestion, workspaceId
 }
 
 export function cancelWorkspaceQuestion(): void {
-  set(tableQuestion, null)
-  set(newQueryRequest, null)
+  set(workspaceQuestion, null)
 }

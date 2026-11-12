@@ -2,10 +2,10 @@
 import { defineCheck } from 'orca/testing'
 import {
   type ConnectionEntry,
-  NEW_QUERY_REQUEST_KEY,
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
   type SchemaTree,
   SQLITE_FORM_REQUEST_KEY,
-  type WorkspaceChoice,
 } from '../protocol'
 import type { FormDraft } from './connection-form-state'
 import { connectionKey, schemaKey } from './state'
@@ -81,10 +81,13 @@ const FOUND_FILES = {
 
 const ALL = { saved: [ANALYTICS, SHOP_DB, SHOP], worktrees: [API_WORKTREE] }
 
-const WORKSPACES = [
-  { id: 'id-api', name: 'api' },
-  { id: 'id-web', name: 'web' },
-] satisfies WorkspaceChoice[]
+const NEW_QUERY_QUESTION = {
+  action: { kind: 'new-query' },
+  workspaces: [
+    { id: 'id-api', name: 'api' },
+    { id: 'id-web', name: 'web' },
+  ],
+} satisfies NewQueryQuestion
 
 export default defineCheck({
   empty: {
@@ -103,12 +106,12 @@ export default defineCheck({
     requests: { 'connections.list': ALL },
   },
   'new-query-picker': {
-    storage: { [NEW_QUERY_REQUEST_KEY]: WORKSPACES },
+    storage: { [WORKSPACE_QUESTION_KEY]: NEW_QUERY_QUESTION },
     requests: { 'connections.list': ALL },
   },
   'new-query-picker-dark': {
     theme: 'dark',
-    storage: { [NEW_QUERY_REQUEST_KEY]: WORKSPACES },
+    storage: { [WORKSPACE_QUESTION_KEY]: NEW_QUERY_QUESTION },
     requests: { 'connections.list': ALL },
   },
   'sqlite-form': {

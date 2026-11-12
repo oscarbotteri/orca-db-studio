@@ -6,7 +6,7 @@ import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { hostError, mockHost, mountWorker, type TestWorker } from 'orca/testing'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { NEW_QUERY_REQUEST_KEY, SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
+import { WORKSPACE_QUESTION_KEY, SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
 import * as worker from '../../src/worker/index'
 
 let root: string
@@ -677,10 +677,13 @@ describe('New Query command', () => {
     const message = await w.command('db-studio.newQuery')
 
     expect(message).toBe('Choose the workspace for the new query in the DB Studio panel.')
-    expect(host.data().storage[NEW_QUERY_REQUEST_KEY]).toEqual([
-      { id: 'id-a', name: 'dup' },
-      { id: 'id-b', name: 'dup' },
-    ])
+    expect(host.data().storage[WORKSPACE_QUESTION_KEY]).toEqual({
+      action: { kind: 'new-query' },
+      workspaces: [
+        { id: 'id-a', name: 'dup' },
+        { id: 'id-b', name: 'dup' },
+      ],
+    })
     expect(host.callsOf('editor.open')).toEqual([])
   })
 
@@ -719,10 +722,13 @@ describe('New Query command', () => {
     const message = await w.command('db-studio.newQuery')
 
     expect(message).toBe('Choose the workspace for the new query in the DB Studio panel.')
-    expect(host.data().storage[NEW_QUERY_REQUEST_KEY]).toEqual([
-      { id: 'id-api', name: 'api' },
-      { id: 'id-web', name: 'web' },
-    ])
+    expect(host.data().storage[WORKSPACE_QUESTION_KEY]).toEqual({
+      action: { kind: 'new-query' },
+      workspaces: [
+        { id: 'id-api', name: 'api' },
+        { id: 'id-web', name: 'web' },
+      ],
+    })
     expect(host.callsOf('editor.open')).toEqual([])
   })
 
@@ -732,7 +738,7 @@ describe('New Query command', () => {
     const message = await w.command('db-studio.newQuery')
 
     expect(message).toBe('Opened .db-studio/query.sql in api.')
-    expect(host.data().storage[NEW_QUERY_REQUEST_KEY]).toBeUndefined()
+    expect(host.data().storage[WORKSPACE_QUESTION_KEY]).toBeUndefined()
     expect(host.callsOf('editor.open')).toEqual([
       { workspaceId: 'id-api', path: '.db-studio/query.sql' },
     ])
