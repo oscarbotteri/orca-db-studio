@@ -142,8 +142,9 @@ async function openDocument(
   const asked = read(workspaceQuestion)
   try {
     const result = await request()
+    const stillAsked = read(workspaceQuestion) === asked
     cancelWorkspaceQuestionIfStill(asked)
-    if (result.status === 'choose-workspace') askWorkspace(result.workspaces)
+    if (result.status === 'choose-workspace' && stillAsked) askWorkspace(result.workspaces)
   } catch (error) {
     cancelWorkspaceQuestionIfStill(asked)
     set(openError, { title: errorTitle, message: errorMessage(error) })

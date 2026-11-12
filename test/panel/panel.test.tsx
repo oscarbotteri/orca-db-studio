@@ -320,6 +320,23 @@ describe('opening a table', () => {
     expect(p.find({ text: /Open in which workspace/ })).toBeNull()
   })
 
+  test('keeps a question the command asks while the panel opens a table', async () => {
+    const askedMeanwhile = {
+      action: { kind: 'new-query' },
+      workspaces: [{ id: 'id-c', name: 'docs', branch: null }],
+    } satisfies NewQueryQuestion
+    const { p } = await mountShop(() => {
+      set(workspaceQuestion, askedMeanwhile)
+      return { status: 'choose-workspace', workspaces: [{ id: 'w1', name: 'api', branch: 'main' }] }
+    })
+
+    await p.activateItem(tree, ordersKey)
+
+    expect(p.find({ text: /New query in which workspace/ })).not.toBeNull()
+    expect(p.find({ text: /Open orders in which workspace/ })).toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toEqual(askedMeanwhile)
+  })
+
   test('shows why the table could not be opened', async () => {
     const { p } = await mountShop(() => {
       throw hostError('action_failed', 'Open a workspace to open a table')
