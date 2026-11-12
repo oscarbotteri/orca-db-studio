@@ -85,6 +85,7 @@ export interface FoundSqliteFile {
 export interface WorkspaceChoice {
   id: string
   name: string
+  branch: string | null
 }
 
 export interface NewQueryQuestion {

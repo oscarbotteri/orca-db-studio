@@ -31,6 +31,7 @@ export function WorkspacePicker() {
             <ListItem
               key={workspace.id}
               title={workspace.name}
+              description={workspace.branch ?? undefined}
               icon="folder"
               onPress={() => answerWorkspaceQuestion(question, workspace.id)}
             />

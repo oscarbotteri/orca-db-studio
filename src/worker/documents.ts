@@ -26,7 +26,7 @@ async function focusedWorkspace(
   const context = await orca.host.call('workspace.readContext')
   if (!context) return undefined
   const matches = workspaces.filter(
-    (w) => w.name === context.displayName && w.branch === context.branch,
+    (workspace) => workspace.name === context.displayName && workspace.branch === context.branch,
   )
   return matches.length === 1 ? matches[0] : undefined
 }
@@ -37,7 +37,7 @@ async function targetWorkspace(
   workspaceId: string | undefined,
 ): Promise<LocalWorkspace | undefined> {
   if (workspaceId !== undefined) {
-    const chosen = workspaces.find((w) => w.id === workspaceId)
+    const chosen = workspaces.find((workspace) => workspace.id === workspaceId)
     if (!chosen) throw new Error('That workspace is no longer open')
     return chosen
   }
@@ -94,7 +94,11 @@ async function openDocument(
   if (!target) {
     return {
       status: 'choose-workspace',
-      workspaces: workspaces.map((w) => ({ id: w.id, name: w.name })),
+      workspaces: workspaces.map((workspace) => ({
+        id: workspace.id,
+        name: workspace.name,
+        branch: workspace.branch,
+      })),
     }
   }
 

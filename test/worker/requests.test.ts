@@ -519,8 +519,8 @@ describe('table.open', () => {
     expect(result).toEqual({
       status: 'choose-workspace',
       workspaces: [
-        { id: 'id-api', name: 'api' },
-        { id: 'id-web', name: 'web' },
+        { id: 'id-api', name: 'api', branch: 'main' },
+        { id: 'id-web', name: 'web', branch: 'main' },
       ],
     })
     expect(host.callsOf('editor.open')).toEqual([])
@@ -541,8 +541,8 @@ describe('table.open', () => {
     expect(result).toEqual({
       status: 'choose-workspace',
       workspaces: [
-        { id: 'id-a', name: 'dup' },
-        { id: 'id-b', name: 'dup' },
+        { id: 'id-a', name: 'dup', branch: 'main' },
+        { id: 'id-b', name: 'dup', branch: 'main' },
       ],
     })
     expect(host.callsOf('editor.open')).toEqual([])
@@ -680,8 +680,8 @@ describe('New Query command', () => {
     expect(host.data().storage[WORKSPACE_QUESTION_KEY]).toEqual({
       action: { kind: 'new-query' },
       workspaces: [
-        { id: 'id-a', name: 'dup' },
-        { id: 'id-b', name: 'dup' },
+        { id: 'id-a', name: 'dup', branch: 'main' },
+        { id: 'id-b', name: 'dup', branch: 'main' },
       ],
     })
     expect(host.callsOf('editor.open')).toEqual([])
@@ -725,8 +725,8 @@ describe('New Query command', () => {
     expect(host.data().storage[WORKSPACE_QUESTION_KEY]).toEqual({
       action: { kind: 'new-query' },
       workspaces: [
-        { id: 'id-api', name: 'api' },
-        { id: 'id-web', name: 'web' },
+        { id: 'id-api', name: 'api', branch: 'main' },
+        { id: 'id-web', name: 'web', branch: 'main' },
       ],
     })
     expect(host.callsOf('editor.open')).toEqual([])

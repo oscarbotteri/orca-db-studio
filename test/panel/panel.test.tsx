@@ -307,7 +307,7 @@ describe('opening a table', () => {
       return calls.length === 1
         ? {
             status: 'choose-workspace',
-            workspaces: [{ id: 'w1', name: 'api' }],
+            workspaces: [{ id: 'w1', name: 'api', branch: 'main' }],
           }
         : { status: 'opened', path: '.db-studio/orders.sql', workspaceName: 'api' }
     })
@@ -335,8 +335,8 @@ describe('New Query command', () => {
   const NEW_QUERY_QUESTION = {
     action: { kind: 'new-query' },
     workspaces: [
-      { id: 'id-a', name: 'api' },
-      { id: 'id-b', name: 'web' },
+      { id: 'id-a', name: 'api', branch: 'main' },
+      { id: 'id-b', name: 'api', branch: 'feat/search' },
     ],
   } satisfies NewQueryQuestion
 
@@ -351,12 +351,15 @@ describe('New Query command', () => {
     return { host, p: await mount(panel, { host }) }
   }
 
-  test('asks which workspace gets the query', async () => {
+  test('asks which workspace gets the query, telling same-named ones apart by branch', async () => {
     const { p } = await mountAsked(() => undefined)
 
     expect(p.find({ text: /New query in which workspace/ })).not.toBeNull()
-    expect(p.find({ label: 'api' })).not.toBeNull()
-    expect(p.find({ label: 'web' })).not.toBeNull()
+    expect(p.find({ testId: 'id-a' })?.props).toMatchObject({ title: 'api', description: 'main' })
+    expect(p.find({ testId: 'id-b' })?.props).toMatchObject({
+      title: 'api',
+      description: 'feat/search',
+    })
   })
 
   test('creates the query in the chosen workspace, then stops asking', async () => {
@@ -376,7 +379,7 @@ describe('New Query command', () => {
   test('keeps a question the command asks while the panel creates a query', async () => {
     const askedAgain = {
       action: { kind: 'new-query' },
-      workspaces: [{ id: 'id-c', name: 'docs' }],
+      workspaces: [{ id: 'id-c', name: 'docs', branch: null }],
     } satisfies NewQueryQuestion
     const { p } = await mountAsked(() => {
       set(workspaceQuestion, askedAgain)

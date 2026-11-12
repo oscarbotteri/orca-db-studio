@@ -84,8 +84,9 @@ const ALL = { saved: [ANALYTICS, SHOP_DB, SHOP], worktrees: [API_WORKTREE] }
 const NEW_QUERY_QUESTION = {
   action: { kind: 'new-query' },
   workspaces: [
-    { id: 'id-api', name: 'api' },
-    { id: 'id-web', name: 'web' },
+    { id: 'id-api', name: 'api', branch: 'main' },
+    { id: 'id-api-search', name: 'api', branch: 'feat/search' },
+    { id: 'id-web', name: 'web', branch: 'main' },
   ],
 } satisfies NewQueryQuestion
 

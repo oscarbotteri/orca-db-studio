@@ -90,7 +90,7 @@ export default function activate(orca: OrcaWorkerApi): void {
 function askPanelForWorkspace(orca: OrcaWorkerApi, workspaces: WorkspaceChoice[]): Promise<void> {
   return orca.storage.set(WORKSPACE_QUESTION_KEY, {
     action: { kind: 'new-query' },
-    workspaces: workspaces.map(({ id, name }) => ({ id, name })),
+    workspaces: workspaces.map(({ id, name, branch }) => ({ id, name, branch })),
   } satisfies NewQueryQuestion)
 }
 
