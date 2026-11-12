@@ -81,14 +81,20 @@ export interface FoundSqliteFile {
   workspaceName: string
 }
 
-/** A workspace the panel offers when the focused one is ambiguous. */
+/** A workspace the panel offers when DB Studio cannot tell which one a query document goes in. */
 export interface WorkspaceChoice {
   id: string
   name: string
+  branch: string | null
 }
 
-export type OpenTableResult =
-  | { status: 'opened'; path: string }
+export interface NewQueryQuestion {
+  action: { kind: 'new-query' }
+  workspaces: WorkspaceChoice[]
+}
+
+export type OpenDocumentResult =
+  | { status: 'opened'; path: string; workspaceName: string }
   | { status: 'choose-workspace'; workspaces: WorkspaceChoice[] }
 
 /** One statement's rows, cut off at the row limit when `truncated`. */
@@ -116,6 +122,12 @@ export const SAVED_CONNECTIONS_KEY = 'server-connections'
 /** Storage key the "Open SQLite File" command sets so the panel opens the form on SQLite. */
 export const SQLITE_FORM_REQUEST_KEY = 'sqlite-form-requested'
 
+/**
+ * Storage key of the panel's pending workspace question. The "New Query" command writes a
+ * `NewQueryQuestion` there, so a panel opened after the command still asks.
+ */
+export const WORKSPACE_QUESTION_KEY = 'workspace-question'
+
 declare module 'orca' {
   interface PluginRequests {
     'connections.list': { output: ConnectionList }
@@ -136,11 +148,16 @@ declare module 'orca' {
     'explorer.listObjects': { input: { ref: string }; output: SchemaTree }
     /** Every table and view with its columns, for the editor's completion. */
     'editor.schema': { input: { ref: string }; output: ColumnTree }
-    /** Without `workspaceId` the worker picks the focused workspace or asks to choose one. */
+    /**
+     * Without `workspaceId` the worker picks the focused workspace, else the only local one, else
+     * asks to choose.
+     */
     'table.open': {
       input: { ref: string; schema: string; table: string; workspaceId?: string }
-      output: OpenTableResult
+      output: OpenDocumentResult
     }
+    /** An empty query document. X1 */
+    'query.new': { input: { workspaceId: string }; output: OpenDocumentResult }
     'connection.info': { input: { ref: string }; output: { dialect: SqlDialect } }
     /** `documentId` names the query document; its rows replace the ones the last run kept. */
     'query.run': { input: { ref: string; sql: string; documentId: string }; output: QueryResult }

@@ -132,6 +132,16 @@ function ConnectionList({ entries }: ConnectionTreeProps) {
   )
 }
 
+function OpenErrorCallout() {
+  const error = read(openError)
+  if (!error) return null
+  return (
+    <Callout tone="danger" title={error.title}>
+      {error.message}
+    </Callout>
+  )
+}
+
 export function Connections() {
   const list = read(connections)
   return (
@@ -151,11 +161,7 @@ export function Connections() {
           {read(editError)}
         </Callout>
       ) : null}
-      {read(openError) ? (
-        <Callout tone="danger" title="Could not open the table">
-          {read(openError)}
-        </Callout>
-      ) : null}
+      <OpenErrorCallout />
       {list.status === 'loading' ? <Skeleton lines={2} label="Loading connections" /> : null}
       {list.status === 'error' ? (
         <Callout tone="danger" title="Could not load connections">
