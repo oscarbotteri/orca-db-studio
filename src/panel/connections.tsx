@@ -137,7 +137,7 @@ function OpenErrorCallout() {
   if (!error) return null
   return (
     <Callout tone="danger" title={error.title}>
-      {error.text}
+      {error.message}
     </Callout>
   )
 }

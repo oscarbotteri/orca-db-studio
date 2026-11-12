@@ -77,8 +77,6 @@ export default function activate(orca: OrcaWorkerApi): void {
     orca.panels.post('sqlite.formRequested', {})
     return 'Add the SQLite file in the DB Studio panel.'
   })
-  // What to do next is the editor's to say: only it knows whether there is a connection to
-  // choose. X1
   orca.commands.register('db-studio.newQuery', async () => {
     const result = await newQuery(orca)
     if (result.status === 'opened') {
@@ -89,7 +87,6 @@ export default function activate(orca: OrcaWorkerApi): void {
   })
 }
 
-/** The panel reads this from storage, so it asks even if it opens after the command ran. */
 function askPanelForWorkspace(orca: OrcaWorkerApi, workspaces: WorkspaceChoice[]): Promise<void> {
   return orca.storage.set(WORKSPACE_QUESTION_KEY, {
     action: { kind: 'new-query' },

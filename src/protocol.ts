@@ -87,13 +87,11 @@ export interface WorkspaceChoice {
   name: string
 }
 
-/** What the "New Query" command leaves in storage for the panel to ask. */
 export interface NewQueryQuestion {
   action: { kind: 'new-query' }
   workspaces: WorkspaceChoice[]
 }
 
-/** What opening a query document answers, for a table or a new query. */
 export type OpenDocumentResult =
   | { status: 'opened'; path: string; workspaceName: string }
   | { status: 'choose-workspace'; workspaces: WorkspaceChoice[] }
@@ -125,7 +123,7 @@ export const SQLITE_FORM_REQUEST_KEY = 'sqlite-form-requested'
 
 /**
  * Storage key of the panel's pending workspace question. The "New Query" command writes a
- * `NewQueryQuestion` there; the panel writes its other questions there too.
+ * `NewQueryQuestion` there, so a panel opened after the command still asks.
  */
 export const WORKSPACE_QUESTION_KEY = 'workspace-question'
 
@@ -157,7 +155,7 @@ declare module 'orca' {
       input: { ref: string; schema: string; table: string; workspaceId?: string }
       output: OpenDocumentResult
     }
-    /** An empty query document in the chosen workspace, for the "New Query" command. X1 */
+    /** An empty query document. X1 */
     'query.new': { input: { workspaceId: string }; output: OpenDocumentResult }
     'connection.info': { input: { ref: string }; output: { dialect: SqlDialect } }
     /** `documentId` names the query document; its rows replace the ones the last run kept. */

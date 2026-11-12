@@ -1,19 +1,21 @@
 // Asks which workspace gets a new query document when DB Studio cannot tell. E1, X1
 import { Button, Card, List, ListItem, read, Stack, Text } from 'orca'
+import { assertNever } from '../utils/assert-never'
 import {
+  type ActionAwaitingWorkspace,
   answerWorkspaceQuestion,
   cancelWorkspaceQuestion,
-  type WorkspaceAction,
   workspaceQuestion,
 } from './state'
 
-// No default: a new WorkspaceAction kind fails to compile until it has a title.
-function workspaceQuestionTitle(action: WorkspaceAction): string {
+function workspaceQuestionTitle(action: ActionAwaitingWorkspace): string {
   switch (action.kind) {
     case 'table':
       return `Open ${action.table.table} in which workspace?`
     case 'new-query':
       return 'New query in which workspace?'
+    default:
+      return assertNever(action)
   }
 }
 

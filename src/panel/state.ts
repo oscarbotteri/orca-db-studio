@@ -109,21 +109,20 @@ export interface TableRef {
   table: string
 }
 
-/** What waits for the person to say which workspace gets its query document. */
-export type WorkspaceAction = { kind: 'table'; table: TableRef } | NewQueryQuestion['action']
+export type ActionAwaitingWorkspace =
+  | { kind: 'table'; table: TableRef }
+  | NewQueryQuestion['action']
 
 export interface WorkspaceQuestion {
-  action: WorkspaceAction
+  action: ActionAwaitingWorkspace
   workspaces: WorkspaceChoice[]
 }
 
-/** Why a query document could not be opened, under a title naming what was asked. */
 export interface OpenError {
   title: string
-  text: string
+  message: string
 }
 
-/** In storage: the "New Query" command asks here too, so a closed panel still asks once it opens. */
 export const workspaceQuestion = atom<WorkspaceQuestion | null>(WORKSPACE_QUESTION_KEY, null, {
   persist: 'storage',
 })
@@ -131,22 +130,22 @@ export const openError = atom<OpenError | null>(null)
 
 let opening = false
 
-/** Runs one request that opens a query document; a double press must not write two. */
 async function openDocument(
-  title: string,
+  errorTitle: string,
   request: () => Promise<OpenDocumentResult>,
-  onChoose: (workspaces: WorkspaceChoice[]) => void,
+  askWorkspace: (workspaces: WorkspaceChoice[]) => void,
 ): Promise<void> {
+  // A double press must not write two documents.
   if (opening) return
   opening = true
   set(openError, null)
   try {
     const result = await request()
     cancelWorkspaceQuestion()
-    if (result.status === 'choose-workspace') onChoose(result.workspaces)
+    if (result.status === 'choose-workspace') askWorkspace(result.workspaces)
   } catch (error) {
     cancelWorkspaceQuestion()
-    set(openError, { title, text: errorMessage(error) })
+    set(openError, { title: errorTitle, message: errorMessage(error) })
   } finally {
     opening = false
   }

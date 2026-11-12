@@ -31,10 +31,6 @@ async function focusedWorkspace(
   return matches.length === 1 ? matches[0] : undefined
 }
 
-/**
- * The asked-for workspace, else the focused one, else the only local one. Undefined means the
- * person has to choose, which only happens when there are several.
- */
 async function targetWorkspace(
   orca: OrcaWorkerApi,
   workspaces: LocalWorkspace[],
@@ -50,8 +46,7 @@ async function targetWorkspace(
   return workspaces.length === 1 ? workspaces[0] : undefined
 }
 
-/** The local workspaces, throwing when there is none: a query document needs one to live in. */
-async function nonEmptyLocalWorkspaces(orca: OrcaWorkerApi): Promise<LocalWorkspace[]> {
+async function requireLocalWorkspaces(orca: OrcaWorkerApi): Promise<LocalWorkspace[]> {
   const workspaces = await listLocalWorkspaces(orca)
   if (workspaces.length === 0) {
     throw new Error(
@@ -78,24 +73,23 @@ async function writeDocument(dir: string, stem: string, content: string): Promis
   }
 }
 
-/** `.db-studio/` in the workspace, ignoring itself so the repo's own .gitignore is never touched. */
-async function queryFolder(workspace: LocalWorkspace): Promise<string> {
+async function ensureQueryFolder(workspace: LocalWorkspace): Promise<string> {
   const dir = join(workspace.path, FOLDER)
   await mkdir(dir, { recursive: true })
+  // The folder ignores itself, so the repo's own .gitignore is never touched.
   await writeFile(join(dir, '.gitignore'), '*\n', { flag: 'wx' }).catch((error: unknown) => {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
   })
   return dir
 }
 
-/** Writes a query document in the target workspace and opens it, or lists the workspaces to choose. */
 async function openDocument(
   orca: OrcaWorkerApi,
   workspaceId: string | undefined,
   stem: string,
   content: string,
 ): Promise<OpenDocumentResult> {
-  const workspaces = await nonEmptyLocalWorkspaces(orca)
+  const workspaces = await requireLocalWorkspaces(orca)
   const target = await targetWorkspace(orca, workspaces, workspaceId)
   if (!target) {
     return {
@@ -104,7 +98,7 @@ async function openDocument(
     }
   }
 
-  const name = await writeDocument(await queryFolder(target), stem, content)
+  const name = await writeDocument(await ensureQueryFolder(target), stem, content)
   const path = `${FOLDER}/${name}`
   await orca.host.call('editor.open', { workspaceId: target.id, path })
   return { status: 'opened', path, workspaceName: target.name }
