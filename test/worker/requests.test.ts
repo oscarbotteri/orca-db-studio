@@ -684,6 +684,62 @@ describe('New Query command', () => {
     expect(host.callsOf('editor.open')).toEqual([])
   })
 
+  test('names a second query query-2.sql instead of overwriting the first', async () => {
+    const { host, worker: w } = await startWithFocus(['api'], {
+      branch: 'main',
+      displayName: 'api',
+    })
+    await w.command('db-studio.newQuery')
+    await writeFile(join(root, 'api', '.db-studio', 'query.sql'), 'SELECT 1\n')
+
+    const message = await w.command('db-studio.newQuery')
+
+    expect(message).toBe(
+      'Opened .db-studio/query-2.sql in api. Choose its connection in the editor.',
+    )
+    expect(await readFile(join(root, 'api', '.db-studio', 'query.sql'), 'utf8')).toBe('SELECT 1\n')
+    expect(await readFile(join(root, 'api', '.db-studio', 'query-2.sql'), 'utf8')).toBe('')
+    expect(host.callsOf('editor.open')).toEqual([
+      { workspaceId: 'id-api', path: '.db-studio/query.sql' },
+      { workspaceId: 'id-api', path: '.db-studio/query-2.sql' },
+    ])
+  })
+
+  test('makes .db-studio/ ignore itself and never touches the repo .gitignore', async () => {
+    const { worker: w } = await startWithFocus(['api'], { branch: 'main', displayName: 'api' })
+    await writeFile(join(root, 'api', '.gitignore'), 'dist\n')
+
+    await w.command('db-studio.newQuery')
+
+    expect(await readFile(join(root, 'api', '.db-studio', '.gitignore'), 'utf8')).toBe('*\n')
+    expect(await readFile(join(root, 'api', '.gitignore'), 'utf8')).toBe('dist\n')
+  })
+
+  test('asks the panel to choose when none of several workspaces is focused', async () => {
+    const { host, worker: w } = await startWithFocus(['api', 'web'], null)
+
+    const message = await w.command('db-studio.newQuery')
+
+    expect(message).toBe('Choose the workspace for the new query in the DB Studio panel.')
+    expect(host.data().storage[NEW_QUERY_REQUEST_KEY]).toEqual([
+      { id: 'id-api', name: 'api' },
+      { id: 'id-web', name: 'web' },
+    ])
+    expect(host.callsOf('editor.open')).toEqual([])
+  })
+
+  test('opens in the only local workspace when none is focused', async () => {
+    const { host, worker: w } = await startWithFocus(['api'], null)
+
+    const message = await w.command('db-studio.newQuery')
+
+    expect(message).toBe('Opened .db-studio/query.sql in api. Choose its connection in the editor.')
+    expect(host.data().storage[NEW_QUERY_REQUEST_KEY]).toBeUndefined()
+    expect(host.callsOf('editor.open')).toEqual([
+      { workspaceId: 'id-api', path: '.db-studio/query.sql' },
+    ])
+  })
+
   test('creates the query in the workspace the person chose', async () => {
     const { worker: w } = await startWithFocus(['api', 'web'], null)
 
@@ -691,6 +747,15 @@ describe('New Query command', () => {
 
     expect(result).toEqual({ status: 'opened', path: '.db-studio/query.sql', workspaceName: 'api' })
     expect(await readFile(join(root, 'api', '.db-studio', 'query.sql'), 'utf8')).toBe('')
+  })
+
+  test('refuses a chosen workspace that has since closed', async () => {
+    const { host, worker: w } = await startWithFocus(['api', 'web'], null)
+
+    await expect(w.request('query.new', { workspaceId: 'id-gone' })).rejects.toThrow(
+      'That workspace is no longer open',
+    )
+    expect(host.callsOf('editor.open')).toEqual([])
   })
 
   test('fails clearly when no local workspace is open', async () => {
