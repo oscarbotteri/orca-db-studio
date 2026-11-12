@@ -65,7 +65,8 @@ SELECT * FROM "public"."users" LIMIT 100
 - `<ref>` is a saved connection's id, a SQLite file's path, or a worktree connection (the variable plus the workspace id, since a frame cannot tell which workspace its file is in).
 - A `.sql` file without the line opens as a plain SQL editor with a "Choose connection" control that writes the line.
 - New documents go to `.db-studio/` in the target workspace. The worker creates `.db-studio/.gitignore` containing `*`, so the folder ignores itself and DB Studio never edits the repo's own `.gitignore`.
-- Target workspace: a worktree connection's own workspace; otherwise the focused workspace when it matches exactly one entry of `workspace.list`, else a workspace picker. With no workspace open, opening a table fails with a clear error.
+- Target workspace: a worktree connection's own workspace; otherwise the focused workspace when it matches exactly one local entry of `workspace.list`; otherwise the only local workspace; else the panel's workspace picker. `workspace.readContext` names the focused workspace only by display name and branch, so two workspaces sharing both also end in the picker. With no local workspace open, opening a document fails with a clear error.
+- The "New Query" command cannot draw the picker itself: it stores the choices under a storage key and the panel asks, as "Open SQLite File" does for its form.
 
 ## Query results
 
