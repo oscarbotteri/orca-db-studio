@@ -658,7 +658,7 @@ describe('New Query command', () => {
 
     const message = await w.command('db-studio.newQuery')
 
-    expect(message).toBe('Opened .db-studio/query.sql in web. Choose its connection in the editor.')
+    expect(message).toBe('Opened .db-studio/query.sql in web.')
     expect(await readFile(join(root, 'web', '.db-studio', 'query.sql'), 'utf8')).toBe('')
     expect(host.callsOf('editor.open')).toEqual([
       { workspaceId: 'id-web', path: '.db-studio/query.sql' },
@@ -694,9 +694,7 @@ describe('New Query command', () => {
 
     const message = await w.command('db-studio.newQuery')
 
-    expect(message).toBe(
-      'Opened .db-studio/query-2.sql in api. Choose its connection in the editor.',
-    )
+    expect(message).toBe('Opened .db-studio/query-2.sql in api.')
     expect(await readFile(join(root, 'api', '.db-studio', 'query.sql'), 'utf8')).toBe('SELECT 1\n')
     expect(await readFile(join(root, 'api', '.db-studio', 'query-2.sql'), 'utf8')).toBe('')
     expect(host.callsOf('editor.open')).toEqual([
@@ -733,7 +731,7 @@ describe('New Query command', () => {
 
     const message = await w.command('db-studio.newQuery')
 
-    expect(message).toBe('Opened .db-studio/query.sql in api. Choose its connection in the editor.')
+    expect(message).toBe('Opened .db-studio/query.sql in api.')
     expect(host.data().storage[NEW_QUERY_REQUEST_KEY]).toBeUndefined()
     expect(host.callsOf('editor.open')).toEqual([
       { workspaceId: 'id-api', path: '.db-studio/query.sql' },

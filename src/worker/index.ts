@@ -72,11 +72,12 @@ export default function activate(orca: OrcaWorkerApi): void {
     orca.panels.post('sqlite.formRequested', {})
     return 'Add the SQLite file in the DB Studio panel.'
   })
-  // When the workspace is unclear, the panel asks: it reads the choices from storage. X1
+  // When the workspace is unclear, the panel asks: it reads the choices from storage. What to do
+  // next is the editor's to say: only it knows whether there is a connection to choose. X1
   orca.commands.register('db-studio.newQuery', async () => {
     const result = await newQuery(orca)
     if (result.status === 'opened') {
-      return `Opened ${result.path} in ${result.workspaceName}. Choose its connection in the editor.`
+      return `Opened ${result.path} in ${result.workspaceName}.`
     }
     await orca.storage.set(NEW_QUERY_REQUEST_KEY, result.workspaces)
     return 'Choose the workspace for the new query in the DB Studio panel.'
