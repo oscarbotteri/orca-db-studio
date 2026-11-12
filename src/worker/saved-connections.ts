@@ -26,6 +26,8 @@ type StoredServer = {
   port: number
   database: string
   user: string
+  /** SSL from a pasted URL's sslmode; absent lets the driver decide from the host. */
+  ssl?: boolean
   label?: StoredLabel
 }
 type StoredSqlite = {
@@ -121,12 +123,26 @@ function cleanForm(form: ConnectionForm): ConnectionForm {
   if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) {
     throw new Error('Enter a port between 1 and 65535')
   }
-  const { label: _sent, ...server } = form
-  return { ...server, name, host, database: form.database.trim(), user: form.user.trim(), ...label }
+  const { label: _sent, ssl, ...server } = form
+  // Only Postgres connects over SSL here; a stray ssl on another engine is dropped, not stored.
+  const sslField = server.engine === 'postgres' && ssl !== undefined ? { ssl } : {}
+  return {
+    ...server,
+    name,
+    host,
+    database: form.database.trim(),
+    user: form.user.trim(),
+    ...sslField,
+    ...label,
+  }
 }
 
 function configOfClean(form: ConnectionForm): ConnectionConfig {
   if (form.engine === 'sqlite') return { engine: 'sqlite', path: form.path }
+  if (form.engine === 'postgres') {
+    const { engine, host, port, database, user, ssl } = form
+    return { engine, host, port, database, user, ...(ssl === undefined ? {} : { ssl }) }
+  }
   const { engine, host, port, database, user } = form
   return { engine, host, port, database, user }
 }

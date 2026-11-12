@@ -266,9 +266,12 @@ function clientConfig(config: PostgresConfig, secret: string | undefined): Clien
     database: config.database,
     user: config.user,
     password: secret,
-    // rejectUnauthorized:false encrypts the connection without requiring the server's CA locally,
-    // which matches how a desktop client reaches a managed database.
-    ssl: ssl ? { rejectUnauthorized: false } : undefined,
+    // SSL on -> rejectUnauthorized:false encrypts the connection without requiring the server's CA
+    // locally, which matches how a desktop client reaches a managed database. An explicit
+    // sslmode=disable (config.ssl === false) passes false through so the pg driver cannot re-enable
+    // SSL from a PGSSLMODE=require environment; only an unspecified mode (config.ssl === undefined
+    // on a non-managed host) stays undefined and lets the driver decide.
+    ssl: ssl ? { rejectUnauthorized: false } : config.ssl === false ? false : undefined,
   }
 }
 

@@ -54,6 +54,8 @@ export interface ServerForm {
   port: number
   database: string
   user: string
+  /** SSL requested by a pasted URL's sslmode; absent lets the driver decide from the host. */
+  ssl?: boolean
   label?: EnvironmentLabel
 }
 
