@@ -1,7 +1,9 @@
 // The panel against a stand-in worker: what the person sees and which requests it makes.
+import { set } from 'orca'
 import { hostError, mockHost, mount } from 'orca/testing'
 import { describe, expect, test } from 'vitest'
 import * as panel from '../../src/panel/index'
+import { workspaceQuestion } from '../../src/panel/state'
 import {
   type ConnectionEntry,
   WORKSPACE_QUESTION_KEY,
@@ -369,6 +371,22 @@ describe('New Query command', () => {
     expect(calls).toEqual([{ workspaceId: 'id-b' }])
     expect(p.find({ text: /New query in which workspace/ })).toBeNull()
     expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toBeNull()
+  })
+
+  test('keeps a question the command asks while the panel creates a query', async () => {
+    const askedAgain = {
+      action: { kind: 'new-query' },
+      workspaces: [{ id: 'id-c', name: 'docs' }],
+    } satisfies NewQueryQuestion
+    const { p } = await mountAsked(() => {
+      set(workspaceQuestion, askedAgain)
+      return { status: 'opened', path: '.db-studio/query.sql', workspaceName: 'api' }
+    })
+
+    await p.press({ testId: 'id-a' })
+
+    expect(p.find({ label: 'docs' })).not.toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toEqual(askedAgain)
   })
 
   test('stops asking when cancelled', async () => {

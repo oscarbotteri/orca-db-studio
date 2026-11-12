@@ -139,12 +139,13 @@ async function openDocument(
   if (opening) return
   opening = true
   set(openError, null)
+  const asked = read(workspaceQuestion)
   try {
     const result = await request()
-    cancelWorkspaceQuestion()
+    cancelWorkspaceQuestionIfStill(asked)
     if (result.status === 'choose-workspace') askWorkspace(result.workspaces)
   } catch (error) {
-    cancelWorkspaceQuestion()
+    cancelWorkspaceQuestionIfStill(asked)
     set(openError, { title: errorTitle, message: errorMessage(error) })
   } finally {
     opening = false
@@ -187,4 +188,8 @@ export function answerWorkspaceQuestion(question: WorkspaceQuestion, workspaceId
 
 export function cancelWorkspaceQuestion(): void {
   set(workspaceQuestion, null)
+}
+
+function cancelWorkspaceQuestionIfStill(asked: WorkspaceQuestion | null): void {
+  if (read(workspaceQuestion) === asked) cancelWorkspaceQuestion()
 }
