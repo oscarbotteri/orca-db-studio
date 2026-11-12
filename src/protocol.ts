@@ -81,11 +81,8 @@ export interface FoundSqliteFile {
   workspaceName: string
 }
 
-/**
- * A workspace the panel offers when DB Studio cannot tell which one a query document goes in.
- * A type, not an interface: the "New Query" command stores it as JSON.
- */
-export type WorkspaceChoice = {
+/** A workspace the panel offers when DB Studio cannot tell which one a query document goes in. */
+export interface WorkspaceChoice {
   id: string
   name: string
 }

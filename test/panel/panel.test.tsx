@@ -330,10 +330,10 @@ describe('opening a table', () => {
 })
 
 describe('New Query command', () => {
-  const WORKSPACES: WorkspaceChoice[] = [
+  const WORKSPACES = [
     { id: 'id-a', name: 'api' },
     { id: 'id-b', name: 'web' },
-  ]
+  ] satisfies WorkspaceChoice[]
 
   async function mountAsked(create: (input: unknown) => unknown) {
     const host = mockHost({

@@ -81,10 +81,10 @@ const FOUND_FILES = {
 
 const ALL = { saved: [ANALYTICS, SHOP_DB, SHOP], worktrees: [API_WORKTREE] }
 
-const WORKSPACES: WorkspaceChoice[] = [
+const WORKSPACES = [
   { id: 'id-api', name: 'api' },
   { id: 'id-web', name: 'web' },
-]
+] satisfies WorkspaceChoice[]
 
 export default defineCheck({
   empty: {

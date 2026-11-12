@@ -1,5 +1,5 @@
 import type { OrcaWorkerApi } from 'orca/worker'
-import { NEW_QUERY_REQUEST_KEY, SQLITE_FORM_REQUEST_KEY } from '../protocol'
+import { NEW_QUERY_REQUEST_KEY, SQLITE_FORM_REQUEST_KEY, type WorkspaceChoice } from '../protocol'
 import { type Connections, createConnections } from './connections'
 import { newQuery, openTable } from './documents'
 import { RESULT_CEILING_ROWS } from './query-engine'
@@ -72,16 +72,24 @@ export default function activate(orca: OrcaWorkerApi): void {
     orca.panels.post('sqlite.formRequested', {})
     return 'Add the SQLite file in the DB Studio panel.'
   })
-  // When the workspace is unclear, the panel asks: it reads the choices from storage. What to do
-  // next is the editor's to say: only it knows whether there is a connection to choose. X1
+  // What to do next is the editor's to say: only it knows whether there is a connection to
+  // choose. X1
   orca.commands.register('db-studio.newQuery', async () => {
     const result = await newQuery(orca)
     if (result.status === 'opened') {
       return `Opened ${result.path} in ${result.workspaceName}.`
     }
-    await orca.storage.set(NEW_QUERY_REQUEST_KEY, result.workspaces)
+    await askPanelForWorkspace(orca, result.workspaces)
     return 'Choose the workspace for the new query in the DB Studio panel.'
   })
+}
+
+/** The panel reads this from storage, so it asks even if it opens after the command ran. */
+function askPanelForWorkspace(orca: OrcaWorkerApi, workspaces: WorkspaceChoice[]): Promise<void> {
+  return orca.storage.set(
+    NEW_QUERY_REQUEST_KEY,
+    workspaces.map(({ id, name }) => ({ id, name })),
+  )
 }
 
 export async function deactivate(): Promise<void> {
