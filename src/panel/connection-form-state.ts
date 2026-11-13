@@ -174,12 +174,9 @@ export function pasteConnectionString(text: string): void {
   // A string without a user or database must not wipe what the person typed.
   const present = Object.entries(fields).filter(([, value]) => value !== '')
   // sslmode is carried through so a pasted require/disable reaches the driver, even on a
-  // non-managed host the default would not cover; absent sslmode leaves the field untouched.
-  editDraft({
-    ...Object.fromEntries(present),
-    port: String(port),
-    ...(ssl === undefined ? {} : { ssl }),
-  })
+  // non-managed host the default would not cover. It is always assigned, including undefined, so
+  // re-pasting a URL without sslmode clears a previous override and restores the host default.
+  editDraft({ ...Object.fromEntries(present), port: String(port), ssl })
   if (password) set(formPassword, password)
 }
 
