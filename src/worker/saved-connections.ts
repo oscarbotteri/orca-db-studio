@@ -1,7 +1,7 @@
 // Saved connections: the registry in storage:own, each server password in secrets:own. C1, C3
 import { basename, dirname, isAbsolute, normalize } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
-import type { ConnectionConfig } from '../drivers'
+import { type ConnectionConfig, isSslMode, type SslMode } from '../drivers'
 import { ENVIRONMENTS, TONES } from '../environment-label'
 import {
   type ConnectionEntry,
@@ -26,6 +26,7 @@ type StoredServer = {
   port: number
   database: string
   user: string
+  ssl?: SslMode
   label?: StoredLabel
 }
 type StoredSqlite = {
@@ -104,6 +105,16 @@ function cleanLabel(form: ConnectionForm): { label?: StoredLabel } {
 }
 
 /**
+ * Encryption as stored. `disable` is written as nothing at all: it is the same thing, and a record
+ * saved before the option existed reads back the same way.
+ */
+function cleanSsl(ssl: SslMode | undefined): { ssl?: SslMode } {
+  if (ssl === undefined) return {}
+  if (!isSslMode(ssl)) throw new Error('Pick an encryption mode')
+  return ssl === 'disable' ? {} : { ssl }
+}
+
+/**
  * The form with its values trimmed and checked; a SQLite path is made absolute and normal, and
  * names the connection when the person left the name empty.
  */
@@ -121,14 +132,22 @@ function cleanForm(form: ConnectionForm): ConnectionForm {
   if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) {
     throw new Error('Enter a port between 1 and 65535')
   }
-  const { label: _sent, ...server } = form
-  return { ...server, name, host, database: form.database.trim(), user: form.user.trim(), ...label }
+  const { label: _sent, ssl: _ssl, ...server } = form
+  return {
+    ...server,
+    name,
+    host,
+    database: form.database.trim(),
+    user: form.user.trim(),
+    ...label,
+    ...cleanSsl(form.ssl),
+  }
 }
 
 function configOfClean(form: ConnectionForm): ConnectionConfig {
   if (form.engine === 'sqlite') return { engine: 'sqlite', path: form.path }
-  const { engine, host, port, database, user } = form
-  return { engine, host, port, database, user }
+  const { engine, host, port, database, user, ssl } = form
+  return { engine, host, port, database, user, ...(ssl ? { ssl } : {}) }
 }
 
 export function configOf(form: ConnectionForm): ConnectionConfig {

@@ -16,7 +16,8 @@ export const ENVIRONMENTS = Object.keys(DEFAULT_TONE) as Environment[]
 
 /** What the panel shows under a connection's name: the label first, then where it points. */
 export function panelDescription(entry: ConnectionEntry): string {
-  if (entry.origin === 'worktree') return `.env · ${entry.detail}`
+  // A worktree row already reads as a folder with its branch icon; the space belongs to the host.
+  if (entry.origin === 'worktree') return entry.detail
   return entry.label ? `${entry.label.environment} · ${entry.detail}` : entry.detail
 }
 

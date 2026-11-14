@@ -9,6 +9,7 @@ export type {
   PostgresConfig,
   SqlDialect,
   SqliteConfig,
+  SslMode,
 } from './common/config'
 export type {
   ColumnMeta,
@@ -25,6 +26,7 @@ export type {
   SchemaTree,
   TableColumns,
 } from './common/schema'
+export { isSslMode, SSL_MODES, sslModeForError, tlsOptions } from './common/ssl'
 export { formatSize } from './common/utils'
 
 const loaders: Record<Engine, () => Promise<Driver>> = {

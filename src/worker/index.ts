@@ -2,6 +2,13 @@ import type { OrcaWorkerApi } from 'orca/worker'
 import { SQLITE_FORM_REQUEST_KEY } from '../protocol'
 import { type Connections, createConnections } from './connections'
 import { openTable } from './documents'
+import {
+  addProviderKey,
+  clearProviderKeys,
+  connectCloud,
+  databasesOf,
+  providerView,
+} from './providers'
 import { RESULT_CEILING_ROWS } from './query-engine'
 import { findSqliteFiles } from './sqlite-discovery'
 
@@ -36,6 +43,25 @@ export default function activate(orca: OrcaWorkerApi): void {
   orca.panels.handle('explorer.listObjects', ({ ref }) => registry.listObjects(ref))
   orca.panels.handle('editor.schema', ({ ref }) => registry.listColumns(ref))
   orca.panels.handle('table.open', (input) => openTable(orca, registry, input))
+  orca.panels.handle('provider.view', ({ provider, keyId }) => providerView(orca, provider, keyId))
+  orca.panels.handle('provider.addKey', ({ provider, value }) =>
+    addProviderKey(orca, provider, value),
+  )
+  orca.panels.handle('provider.clearKeys', ({ provider, keyId }) =>
+    clearProviderKeys(orca, provider, keyId),
+  )
+  orca.panels.handle('provider.databases', async ({ provider, projectId, keyId }) => ({
+    branches: await databasesOf(orca, provider, projectId, keyId),
+  }))
+  orca.panels.handle(
+    'provider.connect',
+    async ({ provider, projectId, database, branchId, keyId }) => {
+      const entry = await connectCloud(orca, provider, projectId, database, branchId, keyId)
+      // The panel lists connections again, so the new one shows up in its group.
+      orca.panels.post('connections.changed', {})
+      return entry
+    },
+  )
   orca.panels.handle('connection.info', async ({ ref }) => ({
     dialect: await registry.dialect(ref),
   }))

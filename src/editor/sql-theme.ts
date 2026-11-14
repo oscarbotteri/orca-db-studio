@@ -1,8 +1,8 @@
 // The SQL editor's look: Orca's --orca-* variables, plus a syntax palette Orca does not offer. Q1
 import {
   EditorView,
-  HighlightStyle,
   type Extension,
+  HighlightStyle,
   syntaxHighlighting,
   tags,
 } from '../../vendor/codemirror.js'

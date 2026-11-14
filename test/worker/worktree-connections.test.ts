@@ -3,8 +3,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mockHost, mountWorker, type TestWorker } from 'orca/testing'
+import type { OrcaWorkerApi } from 'orca/worker'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import * as worker from '../../src/worker/index'
+import {
+  parseWorktreeRef,
+  resolveWorktree,
+  worktreeRef,
+} from '../../src/worker/worktree-connections'
 
 let root: string
 
@@ -18,6 +24,8 @@ afterEach(async () => {
 
 interface Workspace {
   name: string
+  /** Where it lives, when the folder is not the workspace's name. */
+  folder?: string
   env?: string
   envLocal?: string
   hostId?: string
@@ -26,7 +34,8 @@ interface Workspace {
 async function start(workspaces: Workspace[], settings: Record<string, string> = {}) {
   const listed = []
   for (const w of workspaces) {
-    const path = join(root, w.name)
+    const folder = w.folder ?? w.name
+    const path = join(root, folder)
     await mkdir(path, { recursive: true })
     if (w.env !== undefined) await writeFile(join(path, '.env'), w.env)
     if (w.envLocal !== undefined) await writeFile(join(path, '.env.local'), w.envLocal)
@@ -61,6 +70,21 @@ describe('connections.list worktrees', () => {
     expect(worktrees).toHaveLength(1)
     expect(worktrees[0]).toMatchObject({ name: 'api', detail: 'app@db.local:5433/shop' })
     expect(JSON.stringify(worktrees)).not.toContain('s3cret')
+    await w.deactivate()
+  })
+
+  test('names the connection after its folder, not after the workspace or its branch', async () => {
+    const { worker: w } = await start([
+      {
+        name: 'feat/1-modo-noche',
+        folder: 'shop-api',
+        env: `DATABASE_URL=${PG}\n`,
+      },
+    ])
+
+    const { worktrees } = await w.request('connections.list')
+
+    expect(worktrees[0]?.name).toBe('shop-api')
     await w.deactivate()
   })
 
@@ -176,5 +200,57 @@ describe('worktree connection refs', () => {
       w.request('explorer.listObjects', { ref: 'env:DATABASE_URL:id-api' }),
     ).rejects.toThrow()
     await w.deactivate()
+  })
+})
+
+describe('encryption from the URL', () => {
+  /** Only what resolveWorktree asks of Orca: the workspaces it lists and the configured variable. */
+  function orcaWith(path: string) {
+    return {
+      host: {
+        call: async () => ({
+          workspaces: [
+            { id: 'w1', kind: 'worktree', name: 'neon', path, branch: 'main', hostId: 'local' },
+          ],
+          truncated: false,
+        }),
+      },
+      settings: { get: async () => 'DATABASE_URL' },
+    } as unknown as OrcaWorkerApi
+  }
+
+  test('a Neon URL carrying sslmode=require reaches the driver encrypted', async () => {
+    const path = join(root, 'neon')
+    await mkdir(path, { recursive: true })
+    await writeFile(
+      join(path, '.env'),
+      'DATABASE_URL=postgresql://u:pw@ep-x.eu-central-1.aws.neon.tech/shop?sslmode=require\n',
+    )
+    const ref = parseWorktreeRef(worktreeRef({ variable: 'DATABASE_URL', workspaceId: 'w1' }))
+    if (!ref) throw new Error('el ref del espacio de trabajo no se pudo leer')
+
+    const target = await resolveWorktree(orcaWith(path), ref)
+
+    expect(target.config).toEqual({
+      engine: 'postgres',
+      host: 'ep-x.eu-central-1.aws.neon.tech',
+      port: 5432,
+      database: 'shop',
+      user: 'u',
+      ssl: 'require',
+    })
+    expect(target.password).toBe('pw')
+  })
+
+  test('a URL with no sslmode asks for no encryption', async () => {
+    const path = join(root, 'plain')
+    await mkdir(path, { recursive: true })
+    await writeFile(join(path, '.env'), `DATABASE_URL=${PG}\n`)
+    const ref = parseWorktreeRef(worktreeRef({ variable: 'DATABASE_URL', workspaceId: 'w1' }))
+    if (!ref) throw new Error('el ref del espacio de trabajo no se pudo leer')
+
+    const target = await resolveWorktree(orcaWith(path), ref)
+
+    expect(target.config).not.toHaveProperty('ssl')
   })
 })

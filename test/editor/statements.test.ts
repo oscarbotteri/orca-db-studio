@@ -1,9 +1,9 @@
 // Which SQL runs: the statement under the cursor, and the connection a document names.
 import { describe, expect, test } from 'vitest'
 import {
+  changesSchema,
   connectionLineChange,
   connectionRef,
-  changesSchema,
   isTableQuery,
   statementAt,
   statementCount,

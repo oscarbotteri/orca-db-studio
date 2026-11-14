@@ -1,8 +1,10 @@
 // The form to create, test, edit and delete a saved connection. C1, C2, C3
 import { Button, Callout, Card, Input, Row, read, Select, Stack, set } from 'orca'
+import type { SslMode } from '../drivers'
 import { DEFAULT_TONE, ENVIRONMENTS, TONES } from '../environment-label'
 import type { Environment, Tone } from '../protocol'
 import {
+  applySslFix,
   closeForm,
   deleteFromForm,
   type Engine,
@@ -15,6 +17,7 @@ import {
   saveForm,
   setEngine,
   setEnvironment,
+  setSsl,
   testForm,
 } from './connection-form-state'
 import { SqliteFields } from './sqlite-fields'
@@ -24,6 +27,20 @@ const ENGINES = [
   { value: 'mysql', label: 'MySQL / MariaDB' },
   { value: 'sqlite', label: 'SQLite' },
 ]
+
+/** The three libpq modes that change how the connection is made, named as the URL names them. */
+const SSL_OPTIONS: { value: SslMode; label: string }[] = [
+  { value: 'disable', label: 'Not encrypted (sslmode=disable)' },
+  { value: 'require', label: 'Encrypted, certificate unchecked (sslmode=require)' },
+  { value: 'verify-full', label: 'Encrypted and certificate checked (sslmode=verify-full)' },
+]
+
+/** What the one-click repair says it will do. */
+const FIX_LABELS: Record<SslMode, string> = {
+  disable: 'Turn encryption off and retry',
+  require: 'Encrypt the connection (sslmode=require) and retry',
+  'verify-full': 'Require the certificate (sslmode=verify-full) and retry',
+}
 
 /** Orca's Select drops an empty value, so "no environment" is a word of its own here. */
 const NO_ENVIRONMENT = 'none'
@@ -54,6 +71,12 @@ function ServerFields({ draft }: FormPartProps) {
         value={read(formPassword)}
         placeholder={draft.hasPassword ? 'Unchanged' : ''}
         onChange={(password) => set(formPassword, password)}
+      />
+      <Select
+        label="Encryption"
+        value={draft.ssl ?? 'disable'}
+        options={SSL_OPTIONS}
+        onChange={(value) => setSsl(value as SslMode)}
       />
     </>
   )
@@ -127,6 +150,22 @@ function FormButtons({ draft }: FormPartProps) {
   )
 }
 
+function NoticeBox({ notice }: { notice: NonNullable<FormDraft['notice']> }) {
+  const fix = notice.fix
+  return (
+    <Callout tone={notice.tone} title={notice.tone === 'danger' ? 'Could not continue' : 'Tested'}>
+      {notice.text}
+      {fix ? (
+        <Row gap="sm" justify="start">
+          <Button size="sm" tone="accent" onPress={applySslFix}>
+            {FIX_LABELS[fix.ssl]}
+          </Button>
+        </Row>
+      ) : null}
+    </Callout>
+  )
+}
+
 export function ConnectionForm() {
   const draft = read(formDraft)
   if (!draft) return null
@@ -134,14 +173,7 @@ export function ConnectionForm() {
     <Card title={draft.ref === undefined ? 'New connection' : 'Edit connection'}>
       <Stack gap="sm">
         <ConnectionFields draft={draft} />
-        {draft.notice ? (
-          <Callout
-            tone={draft.notice.tone}
-            title={draft.notice.tone === 'danger' ? 'Could not continue' : 'Tested'}
-          >
-            {draft.notice.text}
-          </Callout>
-        ) : null}
+        {draft.notice ? <NoticeBox notice={draft.notice} /> : null}
         <FormButtons draft={draft} />
       </Stack>
     </Card>

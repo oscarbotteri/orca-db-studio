@@ -1,6 +1,7 @@
 // Columns without a table in front: the ones of the tables the statement reads from. Q2
-import { PostgreSQL, sql } from '@codemirror/lang-sql'
+
 import { CompletionContext } from '@codemirror/autocomplete'
+import { PostgreSQL, sql } from '@codemirror/lang-sql'
 import { EditorState } from '@codemirror/state'
 import { describe, expect, test } from 'vitest'
 import { columnCompletion, columnsFor } from '../../src/editor/column-completion'

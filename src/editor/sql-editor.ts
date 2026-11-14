@@ -1,12 +1,12 @@
 // SQL editor on CodeMirror 6 (ADR 0001). Q1
 import {
   autocompletion,
-  completionKeymap,
   bracketMatching,
   Compartment,
+  completionKeymap,
   defaultKeymap,
-  EditorState,
   drawSelection,
+  EditorState,
   EditorView,
   type Extension,
   highlightActiveLine,

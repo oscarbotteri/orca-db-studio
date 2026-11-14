@@ -1,7 +1,7 @@
 // Worktree connections: the connection variable read from each local workspace's .env files on
 // every use. Nothing read here is stored; the password stays in memory for the session. C4
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { OrcaWorkerApi } from 'orca/worker'
 import { parseConnectionString } from '../connection-string'
 import type { ConnectionConfig } from '../drivers'
@@ -91,9 +91,10 @@ async function variableName(orca: OrcaWorkerApi): Promise<string> {
 function targetOf(url: string | undefined): WorktreeTarget | undefined {
   const parsed = url ? parseConnectionString(url) : undefined
   if (!url || !parsed) return undefined
-  const { password, engine, host, port, database, user } = parsed
+  const { password, engine, host, port, database, user, ssl } = parsed
   return {
-    config: { engine, host, port, database, user },
+    // A `?sslmode=require` in the URL travels with it, so a hosted server such as Neon connects.
+    config: { engine, host, port, database, user, ...(ssl ? { ssl } : {}) },
     password: password || undefined,
     detail: `${user ? `${user}@` : ''}${host}:${port}${database ? `/${database}` : ''}`,
     url,
@@ -109,9 +110,11 @@ export async function listWorktreeConnections(orca: OrcaWorkerApi): Promise<Conn
     if (!target) continue
     entries.push({
       ref: worktreeRef({ variable, workspaceId: workspace.id }),
-      name: workspace.name,
+      // The folder, not Orca's workspace name: "main" or a branch tells nobody which project it is.
+      name: basename(workspace.path) || workspace.name,
       detail: target.detail,
       origin: 'worktree',
+      workspaceId: workspace.id,
     })
   }
   return entries

@@ -60,6 +60,10 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 **Connections**
 
 - PostgreSQL, MySQL/MariaDB and SQLite, from a form or a pasted connection string (`postgres://`, `mysql://`).
+- Three tabs: the connections Orca already has (its workspaces' `.env` and the saved ones), Neon and Supabase.
+- Neon and Supabase take a token — pasted, or the path to a `.env` file that holds it — and list the projects it reaches. More than one account fits per provider: an `Account` selector names each by its email (personal keys) or its organization (organization keys), and switches which account's projects are listed. Tokens are stored in Orca's secrets, never in the plugin's storage or settings.
+- With a Neon token, `Show branches and databases` lists every branch of a project — Neon's copy-on-write clone of the whole data set, with its state and age, the default one first — and the databases each branch holds. `Open` turns one into a connection under **Cloud databases**, ready to explore and query: Neon's API hands over the full connection string, so no password is asked for, and the branch is part of the connection, so two branches never collide.
+- Encrypted connections: the form's `Encryption` field picks `disable`, `require` or `verify-full`; a pasted URL's `?sslmode=require` fills it in, and a worktree `.env` URL keeps it. A server that rejects the plain connection — Neon answers "connection is insecure (try using sslmode=require)" — shows that error with a button that turns encryption on and retries.
 - Test, edit and delete saved connections.
 - SQLite files saved as connections from the same form, picked from those found in your workspaces or pasted by path.
 - Tag a saved connection with an environment (local, dev, staging, prod). Its query documents show a colored band and a badge in the toolbar, and the panel row names it. Worktree connections cannot be tagged.
@@ -68,6 +72,7 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 **Explorer**
 
 - One tree for every engine: connection → database → schema → tables and views.
+- Activating a table writes its query document in the workspace that owns the connection, opens it there and takes you to that workspace, so a table of another workspace no longer looks like a click that did nothing. The document already written for that table is reused, never duplicated.
 - Clear errors when a connection fails.
 
 **Query editor**

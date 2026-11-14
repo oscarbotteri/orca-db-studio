@@ -15,6 +15,7 @@ const API: ConnectionEntry = {
   name: 'api',
   detail: 'app@db:5432/shop',
   origin: 'worktree',
+  workspaceId: 'w1',
 }
 
 const SHOP_TREE: SchemaTree = {
@@ -33,15 +34,30 @@ const FOUND = {
   files: [{ path: '/work/api/app.db', relativePath: 'app.db', workspaceName: 'api' }],
 }
 
-function treeItems(p: {
-  find: (q: { role: string }) => { props: Record<string, unknown> } | null
-}) {
-  return p.find({ role: 'tree' })?.props.items as {
-    key: string
-    label: string
-    description?: string
-    icon?: string
-  }[]
+/** The group's tree that holds an item key: the list is one tree per group now. */
+function treeWith<T extends { props: Record<string, unknown> }>(
+  p: { findAll: (q: { role: string }) => T[] },
+  key: string,
+): T {
+  const tree = p
+    .findAll({ role: 'tree' })
+    .find((item) =>
+      ((item.props.items ?? []) as { key: string }[]).some((child) => child.key === key),
+    )
+  if (!tree) throw new Error(`ningún árbol tiene ${key}`)
+  return tree
+}
+
+function treeItems(p: { findAll: (q: { role: string }) => { props: Record<string, unknown> }[] }) {
+  return p.findAll({ role: 'tree' }).flatMap(
+    (tree) =>
+      (tree.props.items ?? []) as {
+        key: string
+        label: string
+        description?: string
+        icon?: string
+      }[],
+  )
 }
 
 describe('connections list', () => {
@@ -55,18 +71,64 @@ describe('connections list', () => {
     expect(p.find({ label: 'Name' })).not.toBeNull()
   })
 
-  test('lists saved and worktree connections in one tree, each marked with its origin', async () => {
+  test('groups the connections by where a table would open, marking the active workspace', async () => {
+    const p = await mount(panel, {
+      host: mockHost({
+        requests: {
+          'connections.list': {
+            saved: [SHOP],
+            worktrees: [
+              API,
+              { ...API, ref: 'env:DATABASE_URL:w2', name: 'web', workspaceId: 'w2' },
+            ],
+            activeWorkspaceId: 'w1',
+          },
+        },
+      }),
+    })
+
+    // One tree per group: the workspace on screen, the other workspaces, and the saved ones.
+    expect(p.findAll({ role: 'tree' })).toHaveLength(3)
+    expect(p.find({ text: 'Active' })).not.toBeNull()
+    expect(p.find({ text: /Other folders/ })).not.toBeNull()
+    expect(p.find({ text: 'Saved' })).not.toBeNull()
+    expect(
+      p
+        .findAll({ role: 'tree' })
+        .map((tree) => (tree.props.items as { label: string }[]).map((item) => item.label)),
+    ).toEqual([['api'], ['web'], ['shop.db']])
+  })
+
+  test('a worktree connection without a known active workspace stays in one group', async () => {
     const p = await mount(panel, {
       host: mockHost({ requests: { 'connections.list': { saved: [SHOP], worktrees: [API] } } }),
     })
 
-    expect(p.findAll({ role: 'tree' })).toHaveLength(1)
-    expect(p.find({ text: 'Worktree connections' })).toBeNull()
+    expect(p.find({ text: 'Active' })).toBeNull()
+    expect(p.find({ text: /Folders open in Orca/ })).not.toBeNull()
+    expect(p.findAll({ role: 'tree' })).toHaveLength(2)
+  })
+
+  test('each connection is marked with its origin', async () => {
+    const p = await mount(panel, {
+      host: mockHost({
+        requests: {
+          'connections.list': { saved: [SHOP], worktrees: [API], activeWorkspaceId: 'w1' },
+        },
+      }),
+    })
+
     expect(
-      treeItems(p).map(({ label, description, icon }) => ({ label, description, icon })),
+      p
+        .findAll({ role: 'tree' })
+        .flatMap((tree) =>
+          (tree.props.items as { label: string; description: string; icon: string }[]).map(
+            ({ label, description, icon }) => ({ label, description, icon }),
+          ),
+        ),
     ).toEqual([
+      { label: 'api', description: 'app@db:5432/shop', icon: 'branch' },
       { label: 'shop.db', description: 'data', icon: 'database' },
-      { label: 'api', description: '.env · app@db:5432/shop', icon: 'branch' },
     ])
   })
 
@@ -255,6 +317,101 @@ describe('SQLite in the connection form', () => {
   })
 })
 
+describe('provider tabs', () => {
+  const SHOP_PROJECT = { id: 'p1', name: 'shop', detail: 'aws-eu-central-1 · PG 17' }
+
+  async function mountWith(requests: Record<string, unknown> = {}) {
+    const host = mockHost({
+      requests: {
+        'connections.list': { saved: [SHOP], worktrees: [] },
+        'provider.view': { keys: [], projects: [] },
+        ...requests,
+      } as never,
+    })
+    return { host, p: await mount(panel, { host }) }
+  }
+
+  test('offers the three tabs and opens on the workspaces one', async () => {
+    const { p } = await mountWith()
+
+    expect(p.find({ role: 'tab', text: 'Orca Workspaces' })).not.toBeNull()
+    expect(p.find({ role: 'tab', text: 'Neon' })).not.toBeNull()
+    expect(p.find({ role: 'tab', text: 'Supabase' })).not.toBeNull()
+    expect(p.find({ label: 'Token o ruta al .env' })).toBeNull()
+  })
+
+  test('the Neon tab takes a token, or the path of a file that holds it', async () => {
+    const asked: unknown[] = []
+    const { p } = await mountWith({
+      'provider.addKey': (input: unknown) => {
+        asked.push(input)
+        return { keys: [{ masked: 'napi_ab…f456' }], projects: [SHOP_PROJECT] }
+      },
+    })
+
+    await p.select({ label: 'Source of the connections' }, 'neon')
+    await p.type({ label: 'Token o ruta al .env' }, '/Users/dev/api/.env')
+    await p.press({ text: 'Save token' })
+
+    expect(asked).toEqual([{ provider: 'neon', value: '/Users/dev/api/.env' }])
+    expect(p.find({ text: /napi_ab…f456/ })).not.toBeNull()
+    expect(p.find({ text: /shop/ })).not.toBeNull()
+  })
+
+  test('says why the provider refused the token', async () => {
+    const { p } = await mountWith({
+      'provider.view': {
+        keys: [{ masked: 'sbp_ab…c789' }],
+        projects: [],
+        error: 'Supabase refused the token (401). Check that it is a personal access token.',
+      },
+    })
+
+    await p.select({ label: 'Source of the connections' }, 'supabase')
+
+    expect(p.find({ text: /Supabase refused the token/ })).not.toBeNull()
+    expect(p.find({ text: /sbp_ab…c789/ })).not.toBeNull()
+  })
+
+  test('lists the stored accounts and switches between them', async () => {
+    const asked: unknown[] = []
+    const { p } = await mountWith({
+      'provider.view': (input: { provider: string; keyId?: string }) => {
+        asked.push(input)
+        return {
+          keys: [
+            { id: 'k1', masked: 'napi_ab…f456', label: 'acme-projects' },
+            { id: 'k2', masked: 'napi_cd…e789', label: 'dev@example.com' },
+          ],
+          selected: input.keyId ?? 'k1',
+          projects: [],
+        }
+      },
+    })
+
+    await p.select({ label: 'Source of the connections' }, 'neon')
+
+    const accounts = p.find({ label: 'Account' })
+    expect(accounts?.props.options).toEqual([
+      { value: 'k1', label: 'acme-projects' },
+      { value: 'k2', label: 'dev@example.com' },
+    ])
+
+    await p.select({ label: 'Account' }, 'k2')
+
+    expect(asked.at(-1)).toEqual({ provider: 'neon', keyId: 'k2' })
+  })
+
+  test('a provider with no keys explains where to get one', async () => {
+    const { p } = await mountWith()
+
+    await p.select({ label: 'Source of the connections' }, 'neon')
+
+    expect(p.find({ text: /No token yet/ })).not.toBeNull()
+    expect(p.find({ text: /Account settings/ })).not.toBeNull()
+  })
+})
+
 describe('opening a table', () => {
   const tree = { role: 'tree' }
   const connectionKey = JSON.stringify(['connection', SHOP.ref])
@@ -316,6 +473,33 @@ describe('opening a table', () => {
     await p.activateItem(tree, ordersKey)
 
     expect(p.find({ text: /Open a workspace to open a table/ })).not.toBeNull()
+  })
+
+  test('says when the table was opened in another workspace', async () => {
+    const { p } = await mountShop(() => ({
+      status: 'opened',
+      path: '.db-studio/orders.sql',
+      workspace: { id: 'w1', name: 'shop-api' },
+      elsewhere: true,
+    }))
+
+    await p.activateItem(tree, ordersKey)
+
+    expect(p.find({ text: /The table is in another workspace/ })).not.toBeNull()
+    expect(p.find({ text: /shop-api/ })).not.toBeNull()
+  })
+
+  test('stays quiet when the table opened where the person already was', async () => {
+    const { p } = await mountShop(() => ({
+      status: 'opened',
+      path: '.db-studio/orders.sql',
+      workspace: { id: 'w1', name: 'main' },
+      elsewhere: false,
+    }))
+
+    await p.activateItem(tree, ordersKey)
+
+    expect(p.find({ text: /The table is in another workspace/ })).toBeNull()
   })
 })
 
@@ -423,7 +607,10 @@ describe('connection form', () => {
       },
     })
 
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+    await p.activateItem(
+      treeWith(p, JSON.stringify(['connection', 'c1'])),
+      JSON.stringify(['connection', 'c1']),
+    )
     await p.type({ label: 'Host' }, 'db2.internal', { replace: true })
     await p.press({ text: 'Save' })
 
@@ -440,7 +627,10 @@ describe('connection form', () => {
       },
     })
 
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+    await p.activateItem(
+      treeWith(p, JSON.stringify(['connection', 'c1'])),
+      JSON.stringify(['connection', 'c1']),
+    )
     await p.press({ text: 'Delete' })
 
     expect(deleted).toEqual({ ref: 'c1' })
@@ -475,7 +665,10 @@ describe('connection form', () => {
       },
     })
 
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+    await p.activateItem(
+      treeWith(p, JSON.stringify(['connection', 'c1'])),
+      JSON.stringify(['connection', 'c1']),
+    )
 
     expect(p.find({ text: /secrets store failed/ })).not.toBeNull()
     expect(p.find({ label: 'Host' })).toBeNull()
@@ -518,6 +711,55 @@ describe('connection form', () => {
       input: { ref: 'c1', schema: 'public', table: 'users' },
     })
   })
+
+  test('a pasted sslmode fills the encryption field and travels to the worker', async () => {
+    let saved: unknown
+    const { p } = await mountWith({
+      'connection.save': (input: unknown) => {
+        saved = input
+        return PG
+      },
+    })
+
+    await p.press({ label: 'New connection' })
+    await p.type(
+      { label: 'Connection string' },
+      'postgresql://app:pw@ep-cool-rain.eu-central-1.aws.neon.tech/shop?sslmode=require',
+    )
+    await p.type({ label: 'Name' }, 'Neon')
+
+    // The field follows the URL: that is the whole point of reading the parameter.
+    expect(p.find({ label: 'Encryption' })?.props.value).toBe('require')
+
+    await p.press({ text: 'Save' })
+
+    expect(saved).toMatchObject({ form: { engine: 'postgres', ssl: 'require' } })
+  })
+
+  test('a failure that names sslmode offers a fix that encrypts and retries', async () => {
+    const asked: { form: { ssl?: string } }[] = []
+    const { p } = await mountWith({
+      'connection.test': (input: { form: { ssl?: string } }) => {
+        asked.push(input)
+        // What Neon answers to a connection that arrives in the clear.
+        if (!input.form.ssl)
+          throw hostError('action_failed', 'connection is insecure (try using `sslmode=require`)')
+        return {}
+      },
+    })
+
+    await p.press({ label: 'New connection' })
+    await p.type({ label: 'Host' }, 'ep-cool-rain.eu-central-1.aws.neon.tech')
+    await p.press({ text: 'Test' })
+
+    expect(p.find({ text: /connection is insecure/ })).not.toBeNull()
+    await p.press({ text: /^Encrypt the connection/ })
+
+    expect(asked).toHaveLength(2)
+    expect(asked[1]).toMatchObject({ form: { ssl: 'require' } })
+    expect(p.find({ label: 'Encryption' })?.props.value).toBe('require')
+    expect(p.find({ text: /Connection works/ })).not.toBeNull()
+  })
 })
 
 describe('environment label', () => {
@@ -550,10 +792,11 @@ describe('environment label', () => {
   test('a connection row starts its description with the label', async () => {
     const { p } = await mountWith()
 
+    // The worktree connection comes first: its group is the one that opens where the person looks.
     expect(treeItems(p).map((item) => item.description)).toEqual([
+      'app@db:5432/shop',
       'prod · app@db:5432/billing',
       'data',
-      '.env · app@db:5432/shop',
     ])
   })
 
@@ -631,7 +874,10 @@ describe('environment label', () => {
       },
     })
 
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+    await p.activateItem(
+      treeWith(p, JSON.stringify(['connection', 'c1'])),
+      JSON.stringify(['connection', 'c1']),
+    )
 
     expect(p.find({ label: 'Environment' })?.props.value).toBe('dev')
     expect(p.find({ label: 'Color' })?.props.value).toBe('neutral')
@@ -640,7 +886,10 @@ describe('environment label', () => {
   test('a connection saved before labels existed opens with no environment', async () => {
     const { p } = await mountWith({ 'connection.get': { form: FORM, hasPassword: true } })
 
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+    await p.activateItem(
+      treeWith(p, JSON.stringify(['connection', 'c1'])),
+      JSON.stringify(['connection', 'c1']),
+    )
 
     expect(p.find({ label: 'Environment' })?.props.value).toBe('none')
     expect(p.find({ label: 'Color' })?.props.disabled).toBe(true)
@@ -659,7 +908,10 @@ describe('environment label', () => {
       },
     })
 
-    await p.activateItem({ role: 'tree' }, JSON.stringify(['connection', 'c1']))
+    await p.activateItem(
+      treeWith(p, JSON.stringify(['connection', 'c1'])),
+      JSON.stringify(['connection', 'c1']),
+    )
     await p.select({ label: 'Environment' }, 'none')
     await p.press({ text: 'Save' })
 

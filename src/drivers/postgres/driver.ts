@@ -5,6 +5,7 @@ import type { ClientConfig, FieldDef } from 'pg'
 import type { ConnectionConfig, PostgresConfig } from '../common/config'
 import type { ColumnMeta, Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
 import { type ColumnRow, type ColumnTree, groupColumns, type SchemaTree } from '../common/schema'
+import { tlsOptions } from '../common/ssl'
 import { formatSize } from '../common/utils'
 
 type PgModule = typeof import('../../../vendor/pg.js')
@@ -254,6 +255,8 @@ function clientConfig(config: PostgresConfig, secret: string | undefined): Clien
     database: config.database,
     user: config.user,
     password: secret,
+    // The cancel connection is built from this same config, so it reaches the server the same way.
+    ssl: tlsOptions(config.ssl),
   }
 }
 

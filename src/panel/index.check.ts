@@ -27,9 +27,18 @@ const SHOP_DB: ConnectionEntry = {
 
 const API_WORKTREE: ConnectionEntry = {
   ref: 'env:DATABASE_URL:id-api',
-  name: 'api',
-  detail: 'app@localhost:5432/api_dev',
+  name: 'shop-api',
+  detail: 'neondb_owner@ep-cool-rain.eu-central-1.aws.neon.tech:5432/neondb',
   origin: 'worktree',
+  workspaceId: 'id-api',
+}
+
+const WEB_WORKTREE: ConnectionEntry = {
+  ref: 'env:DATABASE_URL:id-web',
+  name: 'neurotalent',
+  detail: 'neondb_owner@ep-nameless-pond-pooler.c-4.eu-central-1.aws.neon.tech:5432/neondb',
+  origin: 'worktree',
+  workspaceId: 'id-web',
 }
 
 const FILLED_FORM: FormDraft = {
@@ -42,6 +51,7 @@ const FILLED_FORM: FormDraft = {
   database: 'shop',
   user: 'app',
   path: '',
+  ssl: 'disable',
   environment: 'prod',
   tone: 'danger',
   notice: null,
@@ -73,11 +83,23 @@ const FOUND_FILES = {
   ],
 }
 
-const ALL = { saved: [ANALYTICS, SHOP_DB, SHOP], worktrees: [API_WORKTREE] }
+const NEON_CLOUD: ConnectionEntry = {
+  ref: 'cloud:neon:lucky-lab-13811214:neondb',
+  name: 'shop-api',
+  detail: 'neondb_owner@ep-wild-morning-batt6fmk-pooler.c-8.eu-central-1.aws.neon.tech:5432/neondb',
+  origin: 'cloud',
+}
+
+const ALL = {
+  saved: [ANALYTICS, SHOP_DB, SHOP],
+  worktrees: [API_WORKTREE, WEB_WORKTREE],
+  cloud: [NEON_CLOUD],
+  activeWorkspaceId: 'id-api',
+}
 
 export default defineCheck({
   empty: {
-    requests: { 'connections.list': { saved: [], worktrees: [] } },
+    requests: { 'connections.list': { saved: [], worktrees: [], cloud: [] } },
   },
   tree: {
     persisted: {
@@ -90,6 +112,33 @@ export default defineCheck({
   'tree-dark': {
     theme: 'dark',
     requests: { 'connections.list': ALL },
+  },
+  'neon-tab': {
+    theme: 'dark',
+    persisted: { plugin: { 'panel-tab': 'neon' } },
+    requests: {
+      'connections.list': ALL,
+      'provider.view': {
+        keys: [{ id: 'k1', masked: 'napi_ab…f456', label: 'acme-projects' }],
+        selected: 'k1',
+        projects: [
+          { id: 'p1', name: 'neurotalent', detail: 'aws-eu-central-1 · PG 17' },
+          { id: 'p2', name: 'shop-api', detail: 'aws-eu-central-1 · PG 16' },
+        ],
+      },
+    },
+  },
+  'supabase-tab-error': {
+    persisted: { plugin: { 'panel-tab': 'supabase' } },
+    requests: {
+      'connections.list': ALL,
+      'provider.view': {
+        keys: [{ id: 'k2', masked: 'sbp_ab…c789', label: 'acme' }],
+        selected: 'k2',
+        projects: [],
+        error: 'Supabase refused the token (401). Check that it is a personal access token.',
+      },
+    },
   },
   'sqlite-form': {
     storage: { [SQLITE_FORM_REQUEST_KEY]: true },

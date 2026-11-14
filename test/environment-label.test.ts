@@ -43,7 +43,7 @@ describe('panelDescription', () => {
   })
 
   test('keeps the .env marker of a worktree connection first', () => {
-    expect(panelDescription({ ...BILLING, origin: 'worktree' })).toBe('.env · user@host:5432/db')
+    expect(panelDescription({ ...BILLING, origin: 'worktree' })).toBe('user@host:5432/db')
   })
 })
 

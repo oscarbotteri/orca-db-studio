@@ -5,6 +5,7 @@ import type { ConnectionOptions, FieldPacket } from 'mysql2'
 import type { ConnectionConfig, MysqlConfig } from '../common/config'
 import type { ColumnMeta, Driver, QueryCursor, QueryOptions, Row, Session } from '../common/driver'
 import { type ColumnRow, type ColumnTree, groupColumns, type SchemaTree } from '../common/schema'
+import { tlsOptions } from '../common/ssl'
 import { formatSize } from '../common/utils'
 
 type MysqlModule = typeof import('../../../vendor/mysql2.js')
@@ -281,6 +282,8 @@ function connectionOptions(config: MysqlConfig, secret: string | undefined): Con
     bigNumberStrings: true,
     dateStrings: true,
     jsonStrings: true,
+    // mysql2 takes the same two TLS shapes: an unverified certificate, or the system's CA store.
+    ssl: tlsOptions(config.ssl),
   }
 }
 

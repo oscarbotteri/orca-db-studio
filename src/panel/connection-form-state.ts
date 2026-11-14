@@ -1,6 +1,7 @@
 // The connection form's draft and the worker requests behind its buttons. C1, C2, C3, X3
 import { atom, plugin, read, set, update } from 'orca'
 import { DEFAULT_PORTS, parseConnectionString } from '../connection-string'
+import { type SslMode, sslModeForError } from '../drivers'
 import { DEFAULT_TONE } from '../environment-label'
 import {
   type ConnectionForm,
@@ -20,6 +21,20 @@ import {
 
 export type Engine = ConnectionForm['engine']
 
+/** What a failed attempt can be repaired with: a mode the server asked for, and how to retry. */
+export interface NoticeFix {
+  ssl: SslMode
+  retry: 'testing' | 'saving'
+}
+
+/** The last test result or failure, shown beside the buttons. */
+export interface Notice {
+  tone: 'success' | 'danger'
+  text: string
+  /** Set when the failure names the SSL mode the server wants, so the form offers to apply it. */
+  fix?: NoticeFix
+}
+
 /** One draft for every engine: a server's fields and a SQLite file's path, each kept on a switch. */
 export interface FormDraft {
   /** Set when editing a saved connection. */
@@ -33,11 +48,13 @@ export interface FormDraft {
   database: string
   user: string
   path: string
+  /** Encryption for a server connection; a SQLite file has none. */
+  ssl: SslMode
   /** `''` is no environment, which leaves the color disabled. */
   environment: Environment | ''
   tone: Tone
   /** The last test result or failure, shown beside the buttons. */
-  notice: { tone: 'success' | 'danger'; text: string } | null
+  notice: Notice | null
 }
 
 /** Kept by Orca for the panel, so a half-filled form survives a tab switch. Never the password. */
@@ -52,12 +69,18 @@ export const findingFiles = atom(false)
 /** Set by the "Open SQLite File" command through storage, for a panel that was closed. */
 const sqliteFormRequested = atom<boolean>(SQLITE_FORM_REQUEST_KEY, false, { persist: 'storage' })
 
-function notice(tone: 'success' | 'danger', text: string): FormDraft['notice'] {
-  return { tone, text }
+function notice(tone: 'success' | 'danger', text: string, fix?: NoticeFix): Notice {
+  return { tone, text, ...(fix ? { fix } : {}) }
 }
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** The one-click repair behind a failure, when what the server said names an SSL mode. */
+function fixFor(retry: NoticeFix['retry'], text: string): NoticeFix | undefined {
+  const ssl = sslModeForError(text)
+  return ssl ? { ssl, retry } : undefined
 }
 
 function blankDraft(engine: Engine): FormDraft {
@@ -70,6 +93,7 @@ function blankDraft(engine: Engine): FormDraft {
     database: '',
     user: '',
     path: '',
+    ssl: 'disable',
     environment: '',
     tone: 'neutral',
     notice: null,
@@ -180,7 +204,18 @@ function formOf(draft: FormDraft): ConnectionForm {
   // A draft persisted before labels joined the form has neither field.
   const label = environment ? { label: { environment, tone: tone ?? 'neutral' } } : {}
   if (!isServer(engine)) return { name, engine, path, ...label }
-  return { name, engine, host, port: Number(port), database, user, ...label }
+  // `disable` travels as nothing at all: it is what a record without the field means.
+  const ssl = draft.ssl ?? 'disable'
+  return {
+    name,
+    engine,
+    host,
+    port: Number(port),
+    database,
+    user,
+    ...label,
+    ...(ssl === 'disable' ? {} : { ssl }),
+  }
 }
 
 function input(draft: FormDraft) {
@@ -204,7 +239,9 @@ async function run(
     const text = await action(draft)
     if (text !== undefined) update(formDraft, (d) => d && { ...d, notice: notice('success', text) })
   } catch (error) {
-    update(formDraft, (d) => d && { ...d, notice: notice('danger', errorMessage(error)) })
+    const text = errorMessage(error)
+    const fix = fixFor(busy, text)
+    update(formDraft, (d) => d && { ...d, notice: notice('danger', text, fix) })
   } finally {
     set(formBusy, null)
   }
@@ -239,4 +276,19 @@ export function deleteFromForm(): Promise<void> {
     loadExpandedObjects()
     return undefined
   })
+}
+
+export function setSsl(ssl: SslMode): void {
+  editDraft({ ssl })
+}
+
+/**
+ * The fix beside a failure: switch to the mode the server named, then try the same thing again —
+ * a test that failed is only a test, a save that failed has to be saved.
+ */
+export function applySslFix(): Promise<void> {
+  const fix = read(formDraft)?.notice?.fix
+  if (!fix) return Promise.resolve()
+  editDraft({ ssl: fix.ssl })
+  return fix.retry === 'saving' ? saveForm() : testForm()
 }

@@ -1,9 +1,9 @@
 // The language the editor installs, built from the bundle the frame loads. Q2
 import { CompletionContext } from '@codemirror/autocomplete'
 import { describe, expect, test } from 'vitest'
-import { EditorState } from '../../vendor/codemirror.js'
 import { language } from '../../src/editor/sql-editor'
 import { completionSchema } from '../../src/editor/sql-schema'
+import { EditorState } from '../../vendor/codemirror.js'
 
 const SHOP = completionSchema({
   defaultSchema: 'shop',

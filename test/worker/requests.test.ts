@@ -1,11 +1,12 @@
 // Seam B: the worker driven only through its protocol requests, on a faked Orca host and real
 // SQLite files in temporary workspaces.
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { hostError, mockHost, mountWorker, type TestWorker } from 'orca/testing'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import type { ConnectionForm } from '../../src/protocol'
 import { SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
 import * as worker from '../../src/worker/index'
 
@@ -94,7 +95,11 @@ describe('saving a SQLite file', () => {
     const saved = await w.request('connection.save', { form: sqliteForm(path, 'Shop') })
 
     expect(saved).toMatchObject({ name: 'Shop', detail: basename(root), origin: 'saved' })
-    expect(await w.request('connections.list')).toEqual({ saved: [saved], worktrees: [] })
+    expect(await w.request('connections.list')).toEqual({
+      saved: [saved],
+      worktrees: [],
+      cloud: [],
+    })
     expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
   })
 
@@ -113,7 +118,7 @@ describe('saving a SQLite file', () => {
     const w = await start()
 
     await expect(saveSqlite(w, path)).rejects.toThrow(`${path} is not a SQLite database`)
-    expect(await w.request('connections.list')).toEqual({ saved: [], worktrees: [] })
+    expect(await w.request('connections.list')).toEqual({ saved: [], worktrees: [], cloud: [] })
   })
 
   test('refuses a relative path', async () => {
@@ -458,7 +463,12 @@ async function shopRef(w: TestWorker): Promise<string> {
 }
 
 describe('table.open', () => {
-  test('writes a query document into .db-studio/ of the focused workspace and opens it', async () => {
+  /** What the request answers when it opened a document: where it is, and whether that was on screen. */
+  function opened(path: string, id: string, name: string, elsewhere = false) {
+    return { status: 'opened', path, workspace: { id, name }, elsewhere }
+  }
+
+  test('writes a query document into .db-studio/ of the focused workspace, opens it and shows it', async () => {
     const { host, worker: w } = await startWithFocus(['api', 'web'], {
       branch: 'main',
       displayName: 'web',
@@ -467,13 +477,15 @@ describe('table.open', () => {
 
     const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual(opened('.db-studio/orders.sql', 'id-web', 'web'))
     expect(await readFile(join(root, 'web', '.db-studio', 'orders.sql'), 'utf8')).toBe(
       `-- db-studio: connection=${ref}\nSELECT * FROM "main"."orders" LIMIT 100\n`,
     )
     expect(host.callsOf('editor.open')).toEqual([
       { workspaceId: 'id-web', path: '.db-studio/orders.sql' },
     ])
+    // Orca opens the tab without moving the person there: the workspace is shown as well.
+    expect(host.callsOf('workspace.open')).toEqual([{ workspaceId: 'id-web' }])
   })
 
   test('makes .db-studio/ ignore itself and never touches the repo .gitignore', async () => {
@@ -487,7 +499,7 @@ describe('table.open', () => {
     expect(await readFile(join(root, 'api', '.gitignore'), 'utf8')).toBe('dist\n')
   })
 
-  test('quotes table names and does not overwrite an earlier document', async () => {
+  test('reuses the document it already wrote for that table, and quotes odd names', async () => {
     const { worker: w } = await startWithFocus(['api'], { branch: 'main', displayName: 'api' })
     const ref = await shopRef(w)
 
@@ -495,10 +507,39 @@ describe('table.open', () => {
     const second = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
     await w.request('table.open', { ref, schema: 'main', table: 'we"ird' })
 
-    expect(second).toEqual({ status: 'opened', path: '.db-studio/orders-2.sql' })
+    expect(second).toEqual(opened('.db-studio/orders.sql', 'id-api', 'api'))
     expect(await readFile(join(root, 'api', '.db-studio', 'we_ird.sql'), 'utf8')).toContain(
       'SELECT * FROM "main"."we""ird" LIMIT 100',
     )
+  })
+
+  test('reuses a document the person edited below the query', async () => {
+    const { worker: w } = await startWithFocus(['api'], { branch: 'main', displayName: 'api' })
+    const ref = await shopRef(w)
+    await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+    const file = join(root, 'api', '.db-studio', 'orders.sql')
+    await writeFile(file, `${await readFile(file, 'utf8')}-- mis notas\n`)
+
+    const again = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(again).toEqual(opened('.db-studio/orders.sql', 'id-api', 'api'))
+    expect(await readFile(file, 'utf8')).toContain('-- mis notas')
+    expect(
+      (await readdir(join(root, 'api', '.db-studio'))).filter((n) => n.endsWith('.sql')),
+    ).toEqual(['orders.sql'])
+  })
+
+  test('a different query for the same table is a document of its own', async () => {
+    const { worker: w } = await startWithFocus(['api'], { branch: 'main', displayName: 'api' })
+    const ref = await shopRef(w)
+    await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+    const file = join(root, 'api', '.db-studio', 'orders.sql')
+    await writeFile(file, '-- db-studio: connection=x\nSELECT count(*) FROM orders\n')
+
+    const again = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
+
+    expect(again).toEqual(opened('.db-studio/orders-2.sql', 'id-api', 'api'))
+    expect(await readFile(file, 'utf8')).toContain('SELECT count(*) FROM orders')
   })
 
   test('asks the panel to choose when the focused workspace is ambiguous', async () => {
@@ -517,8 +558,11 @@ describe('table.open', () => {
     expect(host.callsOf('editor.open')).toEqual([])
   })
 
-  test('uses the workspace the person chose', async () => {
-    const { worker: w } = await startWithFocus(['api', 'web'], null)
+  test('uses the workspace the person chose, and says it was not the one on screen', async () => {
+    const { host, worker: w } = await startWithFocus(['api', 'web'], {
+      branch: 'main',
+      displayName: 'web',
+    })
     const ref = await shopRef(w)
 
     const result = await w.request('table.open', {
@@ -528,10 +572,11 @@ describe('table.open', () => {
       workspaceId: 'id-api',
     })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual(opened('.db-studio/orders.sql', 'id-api', 'api', true))
     expect(await readFile(join(root, 'api', '.db-studio', 'orders.sql'), 'utf8')).toContain(
       'LIMIT 100',
     )
+    expect(host.callsOf('workspace.open')).toEqual([{ workspaceId: 'id-api' }])
   })
 
   test('fails clearly when no workspace is open', async () => {
@@ -564,7 +609,7 @@ describe('table.open', () => {
 
     const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual(opened('.db-studio/orders.sql', 'id-api', 'api'))
     expect(await readFile(join(root, 'api', '.db-studio', 'orders.sql'), 'utf8')).toContain(
       'LIMIT 100',
     )
@@ -581,7 +626,7 @@ describe('table.open', () => {
 
     const result = await w.request('table.open', { ref, schema: 'main', table: 'orders' })
 
-    expect(result).toEqual({ status: 'opened', path: '.db-studio/orders.sql' })
+    expect(result).toEqual(opened('.db-studio/orders.sql', 'id-api', 'api'))
   })
 
   test('refuses a connection that was never added', async () => {
@@ -724,6 +769,36 @@ describe('connection.save', () => {
     expect(w.posts).toContainEqual({ event: 'connections.changed', payload: {} })
     expect(JSON.stringify(host.data().storage)).not.toContain('s3cret-pw')
     expect(Object.values(host.data().secrets)).toEqual(['s3cret-pw'])
+  })
+})
+
+describe('connection encryption', () => {
+  test('keeps the mode the form asked for', async () => {
+    const host = mockHost()
+    const w = await mountWorker(worker, { host })
+
+    const { ref } = await w.request('connection.save', { form: { ...PG_FORM, ssl: 'require' } })
+
+    expect((await w.request('connection.get', { ref })).form).toEqual({
+      ...PG_FORM,
+      ssl: 'require',
+    })
+    await w.deactivate()
+  })
+
+  test('writes "disable" as nothing at all and refuses a mode it does not know', async () => {
+    const host = mockHost()
+    const w = await mountWorker(worker, { host })
+
+    const { ref } = await w.request('connection.save', { form: { ...PG_FORM, ssl: 'disable' } })
+    expect((await w.request('connection.get', { ref })).form).toEqual(PG_FORM)
+
+    await expect(
+      w.request('connection.save', {
+        form: { ...PG_FORM, ssl: 'prefer' } as unknown as ConnectionForm,
+      }),
+    ).rejects.toThrow(/encryption mode/i)
+    await w.deactivate()
   })
 })
 

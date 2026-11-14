@@ -1,5 +1,5 @@
 // Typed UI <-> worker contract, imported by both sides.
-import type { ColumnTree, SchemaTree, SqlDialect } from './drivers'
+import type { ColumnTree, SchemaTree, SqlDialect, SslMode } from './drivers'
 
 export type {
   ColumnTree,
@@ -7,11 +7,12 @@ export type {
   SchemaNode,
   SchemaTree,
   SqlDialect,
+  SslMode,
   TableColumns,
 } from './drivers'
 
 /** Saved by the person in DB Studio, or read from a worktree's .env on every use. */
-export type ConnectionOrigin = 'saved' | 'worktree'
+export type ConnectionOrigin = 'saved' | 'worktree' | 'cloud'
 
 /** What a saved connection points at, for the label every query document on it shows. */
 export type Environment = 'local' | 'dev' | 'staging' | 'prod'
@@ -32,6 +33,8 @@ export interface ConnectionEntry {
   /** Where it points, short enough to sit beside the name. */
   detail: string
   origin: ConnectionOrigin
+  /** A worktree connection's workspace, so the panel can tell it from the one on screen. */
+  workspaceId?: string
   /** Saved connections only; a worktree connection has none. */
   label?: EnvironmentLabel
 }
@@ -39,8 +42,12 @@ export interface ConnectionEntry {
 export interface ConnectionList {
   /** Server connections and SQLite files, by name. */
   saved: ConnectionEntry[]
-  /** One per local workspace whose .env defines the connection variable; named for the workspace. */
+  /** One per local workspace whose .env defines the connection variable; named for its folder. */
   worktrees: ConnectionEntry[]
+  /** Databases opened from a hosted provider's tab; absent when there are none. */
+  cloud?: ConnectionEntry[]
+  /** The workspace Orca is showing, when it can be told apart; its documents open there. */
+  activeWorkspaceId?: string
 }
 
 /** The server engines the connection form offers. */
@@ -54,6 +61,8 @@ export interface ServerForm {
   port: number
   database: string
   user: string
+  /** Encryption asked for; unset is the same as `disable`. */
+  ssl?: SslMode
   label?: EnvironmentLabel
 }
 
@@ -88,7 +97,14 @@ export interface WorkspaceChoice {
 }
 
 export type OpenTableResult =
-  | { status: 'opened'; path: string }
+  | {
+      status: 'opened'
+      path: string
+      /** Where the document was written, so the panel can say it. */
+      workspace: WorkspaceChoice
+      /** True when that is not the workspace on screen: the person was somewhere else. */
+      elsewhere: boolean
+    }
   | { status: 'choose-workspace'; workspaces: WorkspaceChoice[] }
 
 /** One statement's rows, cut off at the row limit when `truncated`. */
@@ -115,6 +131,60 @@ export const SAVED_CONNECTIONS_KEY = 'server-connections'
 
 /** Storage key the "Open SQLite File" command sets so the panel opens the form on SQLite. */
 export const SQLITE_FORM_REQUEST_KEY = 'sqlite-form-requested'
+
+/** The hosted services whose databases the plugin can reach with an API token. */
+export type Provider = 'neon' | 'supabase'
+
+/** A stored token: what the selector calls it, and the token itself never leaves the worker. */
+export interface ProviderKey {
+  /** Stable id of the token, so the panel can name one without seeing it. */
+  id: string
+  /** Recognisable, never the whole thing. */
+  masked: string
+  /** The account the token belongs to: its email when the API says it, else its organization. */
+  label: string
+}
+
+/** A project of a hosted provider, as its API lists it. */
+export interface CloudProject {
+  id: string
+  name: string
+  /** Region, engine version and whatever else tells it apart, in one line. */
+  detail: string
+  /** When it was created, ISO; the panel lists the newest first. */
+  createdAt?: string
+}
+
+/** A database inside a cloud project, with the branch it lives on. */
+export interface CloudDatabase {
+  name: string
+  /** The role the connection uses, which the provider's API also calls the owner. */
+  role: string
+  /** The branch the database was read from, and its id, which the connection needs. */
+  branch?: string
+  branchId?: string
+}
+
+/** A branch of a cloud project: Neon's copy-on-write clone of the whole database. */
+export interface CloudBranch {
+  id: string
+  name: string
+  /** The branch a project opens by default; its connection is the one most people want. */
+  isDefault: boolean
+  /** Its state and age, in one line. */
+  detail: string
+  databases: CloudDatabase[]
+}
+
+/** What a provider tab needs at once: its accounts, the one in use, and what it reaches. */
+export interface ProviderView {
+  keys: ProviderKey[]
+  /** The account whose projects are listed; unset when there is no key. */
+  selected?: string
+  projects: CloudProject[]
+  /** Why the projects could not be read, when the key was refused or the API failed. */
+  error?: string
+}
 
 declare module 'orca' {
   interface PluginRequests {
@@ -146,6 +216,37 @@ declare module 'orca' {
     'query.run': { input: { ref: string; sql: string; documentId: string }; output: QueryResult }
     /** Stops the document's running query, which then rejects as cancelled. */
     'query.cancel': { input: { documentId: string }; output: Record<string, never> }
+    /** The provider's keys and the projects they reach; `refresh` skips a cached answer. */
+    'provider.view': {
+      input: { provider: Provider; keyId?: string }
+      output: ProviderView
+    }
+    /** A token, or the path of a file that holds it; the key is stored in secrets, never storage. */
+    'provider.addKey': {
+      input: { provider: Provider; value: string }
+      output: ProviderView
+    }
+    'provider.clearKeys': {
+      input: { provider: Provider; keyId?: string }
+      output: ProviderView
+    }
+    /** The databases of one cloud project, read on demand: a provider may hold many projects. */
+    'provider.databases': {
+      input: { provider: Provider; projectId: string; keyId?: string }
+      output: { branches: CloudBranch[] }
+    }
+    /** Opens one of those databases as a connection the explorer can use. */
+    'provider.connect': {
+      input: {
+        provider: Provider
+        projectId: string
+        database: string
+        /** The branch the database lives on; without it, the project's default branch. */
+        branchId?: string
+        keyId?: string
+      }
+      output: ConnectionEntry
+    }
     /** The full value of a cell of the document's last result, by position. */
     'query.cell': {
       input: { documentId: string; row: number; column: number }
