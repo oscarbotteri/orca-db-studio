@@ -1,6 +1,15 @@
 // Panel state and the worker requests that change it.
 import { atom, plugin, read, set, update } from 'orca'
-import type { ConnectionList, FoundSqliteFile, SchemaTree, WorkspaceChoice } from '../protocol'
+import {
+  type ConnectionList,
+  type FoundSqliteFile,
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
+  type OpenDocumentResult,
+  type SchemaTree,
+  type WorkspaceChoice,
+} from '../protocol'
+import { assertNever } from '../utils/assert-never'
 
 export type Loadable<T> =
   | { status: 'loading' }
@@ -100,39 +109,88 @@ export interface TableRef {
   table: string
 }
 
-/** A table waiting for the person to say which workspace gets its query document. */
+export type ActionAwaitingWorkspace =
+  | { kind: 'table'; table: TableRef }
+  | NewQueryQuestion['action']
+
 export interface WorkspaceQuestion {
-  table: TableRef
+  action: ActionAwaitingWorkspace
   workspaces: WorkspaceChoice[]
 }
 
-export const workspaceQuestion = atom<WorkspaceQuestion | null>(null)
-export const openError = atom<string | null>(null)
+export interface OpenError {
+  title: string
+  message: string
+}
+
+export const workspaceQuestion = atom<WorkspaceQuestion | null>(WORKSPACE_QUESTION_KEY, null, {
+  persist: 'storage',
+})
+export const openError = atom<OpenError | null>(null)
 
 let opening = false
 
-export async function openTable(table: TableRef, workspaceId?: string): Promise<void> {
+async function openDocument(
+  errorTitle: string,
+  request: () => Promise<OpenDocumentResult>,
+  askWorkspace: (workspaces: WorkspaceChoice[]) => void,
+): Promise<void> {
   // A double press must not write two documents.
   if (opening) return
   opening = true
   set(openError, null)
+  const asked = read(workspaceQuestion)
   try {
-    const result = await plugin.request('table.open', {
-      ...table,
-      ...(workspaceId === undefined ? {} : { workspaceId }),
-    })
-    set(
-      workspaceQuestion,
-      result.status === 'opened' ? null : { table, workspaces: result.workspaces },
-    )
+    const result = await request()
+    const stillAsked = read(workspaceQuestion) === asked
+    cancelWorkspaceQuestionIfStill(asked)
+    if (result.status === 'choose-workspace' && stillAsked) askWorkspace(result.workspaces)
   } catch (error) {
-    set(workspaceQuestion, null)
-    set(openError, errorMessage(error))
+    cancelWorkspaceQuestionIfStill(asked)
+    set(openError, { title: errorTitle, message: errorMessage(error) })
   } finally {
     opening = false
   }
 }
 
+export function openTable(table: TableRef, workspaceId?: string): Promise<void> {
+  return openDocument(
+    'Could not open the table',
+    () =>
+      plugin.request('table.open', {
+        ...table,
+        ...(workspaceId === undefined ? {} : { workspaceId }),
+      }),
+    (workspaces) => set(workspaceQuestion, { action: { kind: 'table', table }, workspaces }),
+  )
+}
+
+function newQuery(workspaceId: string): Promise<void> {
+  return openDocument(
+    'Could not create the query',
+    () => plugin.request('query.new', { workspaceId }),
+    (workspaces) => set(workspaceQuestion, { action: { kind: 'new-query' }, workspaces }),
+  )
+}
+
+export function answerWorkspaceQuestion(question: WorkspaceQuestion, workspaceId: string): void {
+  const { action } = question
+  switch (action.kind) {
+    case 'table':
+      void openTable(action.table, workspaceId)
+      break
+    case 'new-query':
+      void newQuery(workspaceId)
+      break
+    default:
+      assertNever(action)
+  }
+}
+
 export function cancelWorkspaceQuestion(): void {
   set(workspaceQuestion, null)
+}
+
+function cancelWorkspaceQuestionIfStill(asked: WorkspaceQuestion | null): void {
+  if (read(workspaceQuestion) === asked) cancelWorkspaceQuestion()
 }

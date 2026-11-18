@@ -65,7 +65,8 @@ SELECT * FROM "public"."users" LIMIT 100
 - `<ref>` is a saved connection's id, a SQLite file's path, or a worktree connection (the variable plus the workspace id, since a frame cannot tell which workspace its file is in).
 - A `.sql` file without the line opens as a plain SQL editor with a "Choose connection" control that writes the line.
 - New documents go to `.db-studio/` in the target workspace. The worker creates `.db-studio/.gitignore` containing `*`, so the folder ignores itself and DB Studio never edits the repo's own `.gitignore`.
-- Target workspace: a worktree connection's own workspace; otherwise the focused workspace when it matches exactly one entry of `workspace.list`, else a workspace picker. With no workspace open, opening a table fails with a clear error.
+- Target workspace: a worktree connection's own workspace; otherwise the focused workspace when it matches exactly one local entry of `workspace.list`; otherwise the only local workspace; else the panel's workspace picker. `workspace.readContext` names the focused workspace only by display name and branch, so two workspaces sharing both also end in the picker. The picker shows each workspace's branch under its name, as Orca's sidebar does; two workspaces sharing name and branch still look alike, since nothing in `workspace.list` that Orca shows tells them apart. With no local workspace open, opening a document fails with a clear error.
+- The "New Query" command cannot draw the picker itself: it stores the choices under a storage key and the panel asks, as "Open SQLite File" does for its form.
 
 ## Query results
 
@@ -153,6 +154,7 @@ Findings from the pinned Orca source and the 1.4.251 app; they shape the design 
 | `src/drivers/`       | One folder per engine (`postgres/`, `mysql/`, `sqlite/`), `common/` (seam types), `index.ts` (the only import path, lazy registry) |
 | `src/editor/`        | Query document editor: SQL editor, grid                                     |
 | `src/panel/`         | Connections and explorer                                                    |
+| `src/utils/`         | Language helpers with no domain knowledge, for any part (`assertNever`)     |
 | `build/` → `vendor/` | Driver and editor bundles, license notices                                  |
 | `test/`              | Driver tests against real databases + UI tests                              |
 

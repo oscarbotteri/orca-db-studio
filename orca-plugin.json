@@ -73,6 +73,11 @@
         "id": "db-studio.openSqliteFile",
         "title": "DB Studio: Open SQLite File",
         "when": "global"
+      },
+      {
+        "id": "db-studio.newQuery",
+        "title": "DB Studio: New Query",
+        "when": "global"
       }
     ],
     "settings": [

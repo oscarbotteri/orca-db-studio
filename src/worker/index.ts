@@ -1,7 +1,12 @@
 import type { OrcaWorkerApi } from 'orca/worker'
-import { SQLITE_FORM_REQUEST_KEY } from '../protocol'
+import {
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
+  SQLITE_FORM_REQUEST_KEY,
+  type WorkspaceChoice,
+} from '../protocol'
 import { type Connections, createConnections } from './connections'
-import { openTable } from './documents'
+import { newQuery, openTable } from './documents'
 import { RESULT_CEILING_ROWS } from './query-engine'
 import { findSqliteFiles } from './sqlite-discovery'
 
@@ -36,6 +41,7 @@ export default function activate(orca: OrcaWorkerApi): void {
   orca.panels.handle('explorer.listObjects', ({ ref }) => registry.listObjects(ref))
   orca.panels.handle('editor.schema', ({ ref }) => registry.listColumns(ref))
   orca.panels.handle('table.open', (input) => openTable(orca, registry, input))
+  orca.panels.handle('query.new', ({ workspaceId }) => newQuery(orca, workspaceId))
   orca.panels.handle('connection.info', async ({ ref }) => ({
     dialect: await registry.dialect(ref),
   }))
@@ -71,6 +77,21 @@ export default function activate(orca: OrcaWorkerApi): void {
     orca.panels.post('sqlite.formRequested', {})
     return 'Add the SQLite file in the DB Studio panel.'
   })
+  orca.commands.register('db-studio.newQuery', async () => {
+    const result = await newQuery(orca)
+    if (result.status === 'opened') {
+      return `Opened ${result.path} in ${result.workspaceName}.`
+    }
+    await askPanelForWorkspace(orca, result.workspaces)
+    return 'Choose the workspace for the new query in the DB Studio panel.'
+  })
+}
+
+function askPanelForWorkspace(orca: OrcaWorkerApi, workspaces: WorkspaceChoice[]): Promise<void> {
+  return orca.storage.set(WORKSPACE_QUESTION_KEY, {
+    action: { kind: 'new-query' },
+    workspaces: workspaces.map(({ id, name, branch }) => ({ id, name, branch })),
+  } satisfies NewQueryQuestion)
 }
 
 export async function deactivate(): Promise<void> {

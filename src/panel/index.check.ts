@@ -1,6 +1,12 @@
 // Seam C: render checks for the panel. Visual only; the worker's answers are stand-ins.
 import { defineCheck } from 'orca/testing'
-import { type ConnectionEntry, type SchemaTree, SQLITE_FORM_REQUEST_KEY } from '../protocol'
+import {
+  type ConnectionEntry,
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
+  type SchemaTree,
+  SQLITE_FORM_REQUEST_KEY,
+} from '../protocol'
 import type { FormDraft } from './connection-form-state'
 import { connectionKey, schemaKey } from './state'
 
@@ -75,6 +81,15 @@ const FOUND_FILES = {
 
 const ALL = { saved: [ANALYTICS, SHOP_DB, SHOP], worktrees: [API_WORKTREE] }
 
+const NEW_QUERY_QUESTION = {
+  action: { kind: 'new-query' },
+  workspaces: [
+    { id: 'id-api', name: 'api', branch: 'main' },
+    { id: 'id-api-search', name: 'api', branch: 'feat/search' },
+    { id: 'id-web', name: 'web', branch: 'main' },
+  ],
+} satisfies NewQueryQuestion
+
 export default defineCheck({
   empty: {
     requests: { 'connections.list': { saved: [], worktrees: [] } },
@@ -89,6 +104,15 @@ export default defineCheck({
   },
   'tree-dark': {
     theme: 'dark',
+    requests: { 'connections.list': ALL },
+  },
+  'new-query-picker': {
+    storage: { [WORKSPACE_QUESTION_KEY]: NEW_QUERY_QUESTION },
+    requests: { 'connections.list': ALL },
+  },
+  'new-query-picker-dark': {
+    theme: 'dark',
+    storage: { [WORKSPACE_QUESTION_KEY]: NEW_QUERY_QUESTION },
     requests: { 'connections.list': ALL },
   },
   'sqlite-form': {

@@ -1,8 +1,16 @@
 // The panel against a stand-in worker: what the person sees and which requests it makes.
+import { set } from 'orca'
 import { hostError, mockHost, mount } from 'orca/testing'
 import { describe, expect, test } from 'vitest'
 import * as panel from '../../src/panel/index'
-import { type ConnectionEntry, type SchemaTree, SQLITE_FORM_REQUEST_KEY } from '../../src/protocol'
+import { workspaceQuestion } from '../../src/panel/state'
+import {
+  type ConnectionEntry,
+  WORKSPACE_QUESTION_KEY,
+  type NewQueryQuestion,
+  type SchemaTree,
+  SQLITE_FORM_REQUEST_KEY,
+} from '../../src/protocol'
 
 const SHOP: ConnectionEntry = {
   ref: '/data/shop.db',
@@ -297,15 +305,36 @@ describe('opening a table', () => {
     const { p } = await mountShop((input) => {
       calls.push(input)
       return calls.length === 1
-        ? { status: 'choose-workspace', workspaces: [{ id: 'w1', name: 'api' }] }
-        : { status: 'opened', path: '.db-studio/orders.sql' }
+        ? {
+            status: 'choose-workspace',
+            workspaces: [{ id: 'w1', name: 'api', branch: 'main' }],
+          }
+        : { status: 'opened', path: '.db-studio/orders.sql', workspaceName: 'api' }
     })
 
     await p.activateItem(tree, ordersKey)
+    expect(p.find({ text: /Open orders in which workspace/ })).not.toBeNull()
     await p.press({ label: 'api' })
 
     expect(calls[1]).toEqual({ ref: SHOP.ref, schema: 'main', table: 'orders', workspaceId: 'w1' })
     expect(p.find({ text: /Open in which workspace/ })).toBeNull()
+  })
+
+  test('keeps a question the command asks while the panel opens a table', async () => {
+    const askedMeanwhile = {
+      action: { kind: 'new-query' },
+      workspaces: [{ id: 'id-c', name: 'docs', branch: null }],
+    } satisfies NewQueryQuestion
+    const { p } = await mountShop(() => {
+      set(workspaceQuestion, askedMeanwhile)
+      return { status: 'choose-workspace', workspaces: [{ id: 'w1', name: 'api', branch: 'main' }] }
+    })
+
+    await p.activateItem(tree, ordersKey)
+
+    expect(p.find({ text: /New query in which workspace/ })).not.toBeNull()
+    expect(p.find({ text: /Open orders in which workspace/ })).toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toEqual(askedMeanwhile)
   })
 
   test('shows why the table could not be opened', async () => {
@@ -316,6 +345,88 @@ describe('opening a table', () => {
     await p.activateItem(tree, ordersKey)
 
     expect(p.find({ text: /Open a workspace to open a table/ })).not.toBeNull()
+  })
+})
+
+describe('New Query command', () => {
+  const NEW_QUERY_QUESTION = {
+    action: { kind: 'new-query' },
+    workspaces: [
+      { id: 'id-a', name: 'api', branch: 'main' },
+      { id: 'id-b', name: 'api', branch: 'feat/search' },
+    ],
+  } satisfies NewQueryQuestion
+
+  async function mountAsked(create: (input: unknown) => unknown) {
+    const host = mockHost({
+      storage: { [WORKSPACE_QUESTION_KEY]: NEW_QUERY_QUESTION },
+      requests: {
+        'connections.list': { saved: [], worktrees: [] },
+        'query.new': create as never,
+      },
+    })
+    return { host, p: await mount(panel, { host }) }
+  }
+
+  test('asks which workspace gets the query, telling same-named ones apart by branch', async () => {
+    const { p } = await mountAsked(() => undefined)
+
+    expect(p.find({ text: /New query in which workspace/ })).not.toBeNull()
+    expect(p.find({ testId: 'id-a' })?.props).toMatchObject({ title: 'api', description: 'main' })
+    expect(p.find({ testId: 'id-b' })?.props).toMatchObject({
+      title: 'api',
+      description: 'feat/search',
+    })
+  })
+
+  test('creates the query in the chosen workspace, then stops asking', async () => {
+    const calls: unknown[] = []
+    const { p } = await mountAsked((input) => {
+      calls.push(input)
+      return { status: 'opened', path: '.db-studio/query.sql', workspaceName: 'web' }
+    })
+
+    await p.press({ testId: 'id-b' })
+
+    expect(calls).toEqual([{ workspaceId: 'id-b' }])
+    expect(p.find({ text: /New query in which workspace/ })).toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toBeNull()
+  })
+
+  test('keeps a question the command asks while the panel creates a query', async () => {
+    const askedAgain = {
+      action: { kind: 'new-query' },
+      workspaces: [{ id: 'id-c', name: 'docs', branch: null }],
+    } satisfies NewQueryQuestion
+    const { p } = await mountAsked(() => {
+      set(workspaceQuestion, askedAgain)
+      return { status: 'opened', path: '.db-studio/query.sql', workspaceName: 'api' }
+    })
+
+    await p.press({ testId: 'id-a' })
+
+    expect(p.find({ label: 'docs' })).not.toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toEqual(askedAgain)
+  })
+
+  test('stops asking when cancelled', async () => {
+    const { p } = await mountAsked(() => undefined)
+
+    await p.press({ text: 'Cancel' })
+
+    expect(p.find({ text: /New query in which workspace/ })).toBeNull()
+    expect(p.persisted.storage[WORKSPACE_QUESTION_KEY]).toBeNull()
+  })
+
+  test('shows why the query could not be created', async () => {
+    const { p } = await mountAsked(() => {
+      throw hostError('action_failed', 'That workspace is no longer open')
+    })
+
+    await p.press({ testId: 'id-a' })
+
+    expect(p.find({ text: /Could not create the query/ })).not.toBeNull()
+    expect(p.find({ text: /That workspace is no longer open/ })).not.toBeNull()
   })
 })
 
@@ -505,7 +616,7 @@ describe('connection form', () => {
       'explorer.listObjects': {
         schemas: [{ name: 'public', objects: [{ name: 'users', kind: 'table' }] }],
       },
-      'table.open': { status: 'opened', path: '.db-studio/users.sql' },
+      'table.open': { status: 'opened', path: '.db-studio/users.sql', workspaceName: 'api' },
     })
     const tree = { role: 'tree' }
 
