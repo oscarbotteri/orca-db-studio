@@ -76,6 +76,7 @@ Keep a query by moving the file out of `.db-studio/` (a folder Git ignores on it
 - SQL editor with dialect-aware highlighting ([CodeMirror 6](docs/adr/0001-sql-editor-codemirror.md)).
 - Autocomplete for tables, columns and keywords from the live schema.
 - Run the statement under the cursor or the selection.
+- Start a blank query from Orca's palette (<kbd>Cmd/Ctrl</kbd>+<kbd>J</kbd>) with "DB Studio: New Query". It opens an empty document in `.db-studio/` and asks for its connection; when it cannot tell which workspace to use, the panel asks.
 - Cancel a running query. It stops in the database, not only in the UI.
 - Configurable timeout (30 s by default, 110 s at most).
 
