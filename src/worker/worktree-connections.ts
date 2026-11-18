@@ -91,9 +91,9 @@ async function variableName(orca: OrcaWorkerApi): Promise<string> {
 function targetOf(url: string | undefined): WorktreeTarget | undefined {
   const parsed = url ? parseConnectionString(url) : undefined
   if (!url || !parsed) return undefined
-  const { password, engine, host, port, database, user } = parsed
+  const { password, engine, host, port, database, user, ssl } = parsed
   return {
-    config: { engine, host, port, database, user },
+    config: { engine, host, port, database, user, ...(ssl === undefined ? {} : { ssl }) },
     password: password || undefined,
     detail: `${user ? `${user}@` : ''}${host}:${port}${database ? `/${database}` : ''}`,
     url,

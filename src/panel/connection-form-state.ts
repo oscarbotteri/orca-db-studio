@@ -33,6 +33,8 @@ export interface FormDraft {
   database: string
   user: string
   path: string
+  /** SSL from a pasted URL's sslmode; absent until a string carries it. No form toggle yet. */
+  ssl?: boolean
   /** `''` is no environment, which leaves the color disabled. */
   environment: Environment | ''
   tone: Tone
@@ -168,19 +170,24 @@ export function chooseFoundFile(file: FoundSqliteFile): void {
 export function pasteConnectionString(text: string): void {
   const parsed = parseConnectionString(text)
   if (!parsed) return
-  const { password, port, ...fields } = parsed
+  const { password, port, ssl, ...fields } = parsed
   // A string without a user or database must not wipe what the person typed.
   const present = Object.entries(fields).filter(([, value]) => value !== '')
-  editDraft({ ...Object.fromEntries(present), port: String(port) })
+  // sslmode is carried through so a pasted require/disable reaches the driver, even on a
+  // non-managed host the default would not cover. It is always assigned, including undefined, so
+  // re-pasting a URL without sslmode clears a previous override and restores the host default.
+  editDraft({ ...Object.fromEntries(present), port: String(port), ssl })
   if (password) set(formPassword, password)
 }
 
 function formOf(draft: FormDraft): ConnectionForm {
-  const { name, engine, host, port, database, user, path, environment, tone } = draft
+  const { name, engine, host, port, database, user, path, ssl, environment, tone } = draft
   // A draft persisted before labels joined the form has neither field.
   const label = environment ? { label: { environment, tone: tone ?? 'neutral' } } : {}
   if (!isServer(engine)) return { name, engine, path, ...label }
-  return { name, engine, host, port: Number(port), database, user, ...label }
+  // sslmode travels only when a pasted URL set it; absent lets the driver decide from the host.
+  const sslField = ssl === undefined ? {} : { ssl }
+  return { name, engine, host, port: Number(port), database, user, ...sslField, ...label }
 }
 
 function input(draft: FormDraft) {
